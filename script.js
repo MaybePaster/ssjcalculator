@@ -1,13 +1,12 @@
-const MTOW = 45880; // Максимальная взлётная масса (кг)
-const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143; // Скорости для MTOW (узлы)
+const MTOW = 45880;
+const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143; 
 const FLAPS_COEF = {"1": 1.8, "2": 1.5, "3": 1.2};
 const THS_COEF = 0.2;
-const ISA_TEMP = 15; // Стандартная температура ISA на уровне моря
-const ISA_LAPSE_RATE = 1.98; // Градиент температуры ISA (°C/1000ft)
-const MAX_FLEX_DELTA = 50; // Максимальная разница FLEX (обычно 50°C для Airbus)
-const MIN_FLEX_DELTA = 5; // Минимальная разница FLEX
+const ISA_TEMP = 15; 
+const ISA_LAPSE_RATE = 1.98;
+const MAX_FLEX_DELTA = 50; 
+const MIN_FLEX_DELTA = 5; 
 
-// API Keys (в продакшене используйте бэкенд для хранения ключей)
 const AVIATIONSTACK_API_KEY = '058b895d683b4bef5819cd0f46e13b68';
 const CHECKWX_API_KEY = '0959c4a55b0b435492fd2b09db59cffb';
 
@@ -15,7 +14,6 @@ let translations = {};
 let currentLanguage = 'ru';
 let airportCache = {};
 
-// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     loadTranslations();
     initializeTheme();
@@ -23,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateYear();
 });
 
-// Загрузка переводов
 async function loadTranslations() {
     try {
         const response = await fetch('translations.json');
@@ -37,12 +34,10 @@ async function loadTranslations() {
     }
 }
 
-// Применение переводов
 function applyTranslations() {
     const lang = translations[currentLanguage];
     if (!lang) return;
 
-    // Обновляем все элементы с переводами
     const elements = {
         'title': lang.title,
         'aircraft-params': lang.aircraftParams,
@@ -114,6 +109,7 @@ function initializeTheme() {
 function changeLanguage() {
     currentLanguage = this.value;
     applyTranslations();
+    updateYear();
 }
 
 // Переключение поля THS
@@ -126,37 +122,31 @@ function toggleTHSInput() {
 function updateYear() {
     const year = new Date().getFullYear();
     document.getElementById('footer-text').textContent = 
-        translations[currentLanguage]?.footer + ` | ${year}`;
+        (translations[currentLanguage]?.footer || '') + ` | ${year}`;
 }
 
 function calculateFlexTemp(oat, elevation) {
-    // 1. Коррекция ISA для высоты аэропорта
     const isaCorrection = (elevation / 1000) * ISA_LAPSE_RATE;
     const isaTemp = ISA_TEMP - isaCorrection;
     
-    // 2. Расчёт FLEX температуры
-    let flexTemp = oat + isaTemp;
-    
-    // 3. Ограничения и округление
-    flexTemp = Math.min(oat + MAX_FLEX_DELTA, flexTemp); // Не выше OAT+50
-    flexTemp = Math.max(oat + MIN_FLEX_DELTA, flexTemp); // Минимум OAT+5
-    flexTemp = Math.floor(flexTemp); // Округление вниз
+    let flexTemp = oat + (isaTemp - oat) / 2;
+    flexTemp = Math.min(oat + MAX_FLEX_DELTA, flexTemp);
+    flexTemp = Math.max(oat + MIN_FLEX_DELTA, flexTemp);
+    flexTemp = Math.floor(flexTemp);
     
     return flexTemp;
 }
 
 function determineThrustMode(flexTemp, oat, runwayLength, tow, elevation) {
-    // Условия, когда нельзя использовать FLEX (нужен TOGA)
     const isCriticalCondition = 
-        (flexTemp >= oat + MAX_FLEX_DELTA - 5) || // FLEX близок к максимуму
-        (tow > MTOW * 0.95) || // Высокая масса
-        (runwayLength < 2000) || // Короткая ВПП
-        (elevation > 5000); // Высокогорный аэропорт
+        (flexTemp >= oat + MAX_FLEX_DELTA - 5) ||
+        (tow > MTOW * 0.95) ||
+        (runwayLength < 2000) ||
+        (elevation > 5000);
     
     return isCriticalCondition ? 'TOGA' : 'FLEX';
 }
 
-// Синхронизация данных аэропорта
 async function syncAirportData() {
     const icao = document.getElementById('icao').value.trim().toUpperCase();
     const syncButton = document.getElementById('sync-airport');
@@ -211,7 +201,6 @@ async function syncAirportData() {
     }
 }
 
-// Запрос данных аэропорта
 async function fetchAirportData(icao) {
     try {
         const response = await fetch(`https://api.aviationstack.com/v1/airports?access_key=${AVIATIONSTACK_API_KEY}&icao=${icao}`);
@@ -236,7 +225,6 @@ async function fetchAirportData(icao) {
     }
 }
 
-// Запрос METAR
 async function fetchMETAR(icao) {
     try {
         const response = await fetch(`https://api.checkwx.com/metar/${icao}/decoded`, {
@@ -265,7 +253,6 @@ async function fetchMETAR(icao) {
     }
 }
 
-// Заполнение данных аэропорта
 function fillAirportData(data) {
     const fields = {
         'runway': data.runway,
@@ -287,7 +274,6 @@ function fillAirportData(data) {
     }
 }
 
-// Расчёт скоростей
 function calculateSpeeds() {
     const formData = getFormData();
     const errorElement = document.getElementById('error');
@@ -309,24 +295,16 @@ function calculateSpeeds() {
             formData.airport_elevation
         );
         
-        document.getElementById('flex_temp_display').textContent = `${flexTemp} °C`;
-        document.getElementById('thrust_mode_display').textContent = thrustMode;
-        const flexCorrection = thrustMode === 'FLEX' ? 
-            (flexTemp - formData.temperature) * 0.2 : 0;
-        
-        const coef = FLAPS_COEF[formData.flaps_config];
-        const massCorrection = (MTOW - formData.tow) * coef / 1000;
         const speeds = calculateFinalSpeeds(formData, headwind, flexTemp);
         const requiredLength = (speeds.V2 * 1.5) * 0.5144;
         
-        displayResults(formData, speeds, headwind, requiredLength, flexTemp);
+        displayResults(formData, speeds, headwind, requiredLength, flexTemp, thrustMode);
     } catch (error) {
         showError(error.message);
         document.getElementById('results').style.display = 'none';
     }
 }
 
-// Получение данных формы
 function getFormData() {
     return {
         tow: parseFloat(document.getElementById('tow').value),
@@ -336,7 +314,7 @@ function getFormData() {
         runway: document.getElementById('runway').value.trim().toUpperCase(),
         runway_length: parseFloat(document.getElementById('runway_length').value),
         runway_heading: parseInt(document.getElementById('runway_heading').value),
-        runway_condition: document.getElementById('runway_condition').value.toLowerCase(),
+        runway_condition: document.getElementById('runway_condition').value,
         airport_elevation: parseFloat(document.getElementById('airport_elevation').value),
         qnh: parseFloat(document.getElementById('qnh').value),
         temperature: parseInt(document.getElementById('temperature').value),
@@ -347,7 +325,6 @@ function getFormData() {
     };
 }
 
-// Валидация данных
 function validateInputData(data) {
     if (isNaN(data.tow) || data.tow <= 0) {
         throw new Error(currentLanguage === 'ru' ? 
@@ -356,7 +333,9 @@ function validateInputData(data) {
     }
     
     if (data.tow > MTOW) {
-        throw new Error(translations[currentLanguage].error + ' ' + translations[currentLanguage].towError);
+        throw new Error(currentLanguage === 'ru' ? 
+            'Взлётная масса превышает максимальную' : 
+            'Takeoff weight exceeds maximum');
     }
     
     if (data.ths_setting === 'manual' && (isNaN(data.ths_value) || data.ths_value < -4 || data.ths_value > 4)) {
@@ -366,11 +345,9 @@ function validateInputData(data) {
     }
 }
 
-// Расчёт итоговых скоростей
 function calculateFinalSpeeds(data, headwind, flexTemp) {
-    const coef = FLAPS_COEF[formData.flaps_config];
-    const massCorrection = (MTOW - formData.tow) * coef / 1000;
-    
+    const coef = FLAPS_COEF[data.flaps_config];
+    const massCorrection = (MTOW - data.tow) * coef / 1000;
     
     let V1 = V1_MTOW - massCorrection;
     let VR = VR_MTOW - massCorrection;
@@ -379,20 +356,16 @@ function calculateFinalSpeeds(data, headwind, flexTemp) {
     // Коррекции
     const tempCorrection = (data.temperature - 15) / 10 * 1.5;
     const windCorrection = headwind * 0.3;
-    const flexCorrection = (flexTemp - data.temperature) * FLEX_COEF;
+    const flexCorrection = (flexTemp - data.temperature) * THS_COEF;
     
     V1 += tempCorrection - windCorrection + flexCorrection;
     VR += tempCorrection - windCorrection + flexCorrection;
     V2 += tempCorrection - windCorrection + flexCorrection;
-
-    let V1 = V1_MTOW - massCorrection + flexCorrection;
-    let VR = VR_MTOW - massCorrection + flexCorrection;
-    let V2 = V2_MTOW - massCorrection + flexCorrection;
     
     // Состояние ВПП
-    if (data.runway_condition === "wet" || data.runway_condition === "мокрая") {
+    if (data.runway_condition === "wet") {
         V1 += 3; VR += 3; V2 += 3;
-    } else if (data.runway_condition === "snowy" || data.runway_condition === "заснеженная") {
+    } else if (data.runway_condition === "snowy") {
         V1 += 5; VR += 5; V2 += 5;
     }
     
@@ -409,14 +382,13 @@ function calculateFinalSpeeds(data, headwind, flexTemp) {
     };
 }
 
-// Отображение результатов
-function displayResults(data, speeds, headwind, requiredLength, flexTemp) {
+function displayResults(data, speeds, headwind, requiredLength, flexTemp, thrustMode) {
     const resultsDiv = document.getElementById('results');
-    const lang = translations[currentLanguage];
+    const lang = translations[currentLanguage] || {};
     const isRussian = currentLanguage === 'ru';
     
     const runwayWarning = requiredLength > data.runway_length ? 
-        `<span class="warning">${lang.notEnough}</span>` : '';
+        `<span class="warning">${lang.notEnough || 'Not enough runway'}</span>` : '';
     
     const thsRow = data.ths_setting === 'manual' ? `
         <tr>
@@ -425,33 +397,35 @@ function displayResults(data, speeds, headwind, requiredLength, flexTemp) {
         </tr>
     ` : '';
     
+    const flexDelta = flexTemp - data.temperature;
+    
     resultsDiv.innerHTML = `
-        <h2>${lang.results}</h2>
+        <h2>${lang.results || 'Results'}</h2>
         <div class="speeds">
             <div class="speed-box">
-                <div>${lang.v1}</div>
+                <div>${lang.v1 || 'V1'}</div>
                 <div class="speed-value">${speeds.V1}</div>
-                <div>${lang.knots}</div>
+                <div>${lang.knots || 'kts'}</div>
             </div>
             <div class="speed-box">
-                <div>${lang.vr}</div>
+                <div>${lang.vr || 'VR'}</div>
                 <div class="speed-value">${speeds.VR}</div>
-                <div>${lang.knots}</div>
+                <div>${lang.knots || 'kts'}</div>
             </div>
             <div class="speed-box">
-                <div>${lang.v2}</div>
+                <div>${lang.v2 || 'V2'}</div>
                 <div class="speed-value">${speeds.V2}</div>
-                <div>${lang.knots}</div>
+                <div>${lang.knots || 'kts'}</div>
             </div>
         </div>
-        <h3>${lang.takeoffInfo}</h3>
+        <h3>${lang.takeoffInfo || 'Takeoff Information'}</h3>
         <table>
             <tr>
-                <th>${lang.airport}</th>
+                <th>${lang.airport || 'Airport'}</th>
                 <td>${data.icao}, ${isRussian ? 'ВПП' : 'Runway'} ${data.runway}</td>
             </tr>
             <tr>
-                <th>${lang.length}</th>
+                <th>${lang.length || 'Length'}</th>
                 <td>${data.runway_length} m ${runwayWarning}</td>
             </tr>
             <tr>
@@ -459,53 +433,21 @@ function displayResults(data, speeds, headwind, requiredLength, flexTemp) {
                 <td>${Math.round(requiredLength)} m</td>
             </tr>
             <tr>
-                <th>${lang.heading}</th>
+                <th>${lang.heading || 'Heading'}</th>
                 <td>${data.runway_heading}°</td>
             </tr>
             <tr>
-                <th>${lang.condition}</th>
+                <th>${lang.condition || 'Condition'}</th>
                 <td>${data.runway_condition}</td>
             </tr>
             <tr>
-                <th>${lang.elev}</th>
+                <th>${lang.elev || 'Elevation'}</th>
                 <td>${data.airport_elevation} ft</td>
             </tr>
             <tr>
-                <th>${lang.headwind}</th>
-                <td>${headwind.toFixed(1)} ${lang.knots}</td>
+                <th>${lang.headwind || 'Headwind'}</th>
+                <td>${headwind.toFixed(1)} ${lang.knots || 'kts'}</td>
             </tr>
-            <tr>
-                <th>FLEX TO TEMP</th>
-                <td>${flexTemp} °C</td>
-            </tr>
-            <tr>
-                <th>${isRussian ? 'Режим THS' : 'THS Mode'}</th>
-                <td>${data.ths_setting === 'auto' ? (isRussian ? 'Авто' : 'Auto') : (isRussian ? 'Ручной' : 'Manual')}</td>
-            </tr>
-            ${thsRow}
-        </table>
-    `;
-    resultsTable += `
-        <tr>
-            <th>${currentLanguage === 'ru' ? 'FLEX TO TEMP' : 'FLEX TEMP'}</th>
-            <td>${flexTemp} °C (${flexTemp - data.temperature}° ${currentLanguage === 'ru' ? 'над OAT' : 'above OAT'})</td>
-        </tr>
-        <tr>
-            <th>${currentLanguage === 'ru' ? 'Режим тяги' : 'Thrust mode'}</th>
-            <td>${flexTemp - data.temperature >= MAX_FLEX_DELTA - 5 ? 
-                (currentLanguage === 'ru' ? 'TOGA' : 'TOGA') : 
-                (currentLanguage === 'ru' ? 'Flex' : 'Flex')}
-            </td>
-        </tr>
-    `;
-    let resultsHTML = `
-        <h2>${isRussian ? 'Результаты расчёта' : 'Calculation Results'}</h2>
-        <div class="speeds">
-            <!-- Блоки скоростей -->
-        </div>
-        <h3>${isRussian ? 'Параметры взлёта' : 'Takeoff Parameters'}</h3>
-        <table>
-            <!-- Основные параметры -->
             <tr>
                 <th>FLEX TO TEMP</th>
                 <td>${flexTemp} °C (${flexDelta}° ${isRussian ? 'над OAT' : 'above OAT'})</td>
@@ -516,17 +458,14 @@ function displayResults(data, speeds, headwind, requiredLength, flexTemp) {
                     isRussian ? '(пониженная тяга)' : '(reduced thrust)' : 
                     isRussian ? '(полная тяга)' : '(full thrust)'}</td>
             </tr>
-            <!-- Остальные параметры -->
+            ${thsRow}
         </table>
     `;
     
     resultsDiv.style.display = 'block';
     resultsDiv.scrollIntoView({ behavior: 'smooth' });
-    document.getElementById('results').innerHTML = resultsHTML;
-    document.getElementById('results').style.display = 'block';
 }
 
-// Показать сообщение об ошибке
 function showError(message) {
     const messagesDiv = document.getElementById('messages');
     messagesDiv.innerHTML = `
@@ -534,10 +473,10 @@ function showError(message) {
             ${message}
         </div>
     `;
-    messagesDiv.querySelector('.message').style.display = 'block';
+    messagesDiv.style.display = 'block';
+    setTimeout(() => messagesDiv.style.display = 'none', 5000);
 }
 
-// Показать сообщение об успехе
 function showSuccess(message) {
     const messagesDiv = document.getElementById('messages');
     messagesDiv.innerHTML = `
@@ -545,5 +484,6 @@ function showSuccess(message) {
             ${message}
         </div>
     `;
-    messagesDiv.querySelector('.message').style.display = 'block';
+    messagesDiv.style.display = 'block';
+    setTimeout(() => messagesDiv.style.display = 'none', 5000);
 }
