@@ -43,6 +43,12 @@
                         <option value="3" id="flaps3">Flaps 3</option>
                     </select>
                 </div>
+                
+                <div class="form-group">
+                    <label id="flex-temp-label">FLEX TO TEMP:</label>
+                    <div id="flex_temp_display" class="calculated-value">-- °C</div>
+                    <small id="flex-note" class="note-text">Рассчитано автоматически</small>
+                </div>
             </div>
             
             <div class="form-section">
@@ -96,7 +102,7 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="temperature" id="temp-label">Температура (°C):</label>
+                    <label for="temperature" id="temp-label">Температура OAT (°C):</label>
                     <input type="number" id="temperature" name="temperature" required value="15" step="1">
                 </div>
                 
@@ -111,17 +117,35 @@
                 </div>
             </div>
             
+            <div class="form-section">
+                <h2 id="ths-params">Настройки THS</h2>
+                
+                <div class="form-group">
+                    <label for="ths_setting" id="ths-setting-label">Режим THS:</label>
+                    <select id="ths_setting" name="ths_setting" required>
+                        <option value="auto" id="ths-auto">Авто</option>
+                        <option value="manual" id="ths-manual">Ручной</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="ths-value-group" style="display: none;">
+                    <label for="ths_value" id="ths-value-label">Значение THS:</label>
+                    <input type="number" id="ths_value" name="ths_value" step="0.1" min="-4" max="4" placeholder="Введите THS">
+                </div>
+            </div>
+            
             <button type="submit" id="calculate-btn">Рассчитать скорости</button>
         </form>
         
         <div id="messages"></div>
         
         <div id="results" class="result-section" style="display: none;">
+            <!-- Результаты будут вставлены сюда через JavaScript -->
         </div>
     </div>
     
     <footer>
-        <p id="footer-text">Калькулятор взлётных скоростей v1.0 | Для учебных целей</p>
+        <p id="footer-text">Калькулятор взлётных скоростей v2.0 | Для учебных целей</p>
     </footer>
     
     <script src="script.js"></script>
