@@ -6,6 +6,115 @@ const FLAPS_COEF = {"1": 1.8, "2": 1.5, "3": 1.2};
 let translations = {};
 let currentLanguage = 'ru';
 
+async function fetchAirportData(icao) {
+    try {
+        const response = await fetch(`https://api.aviationstack.com/v1/airports?access_key=058b895d683b4bef5819cd0f46e13b68&icao=${icao}`);
+        const data = await response.json();
+        
+        if (data.data && data.data.length > 0) {
+            return data.data[0];
+        }
+        return null;
+    } catch (error) {
+        console.error('Error fetching airport data:', error);
+        return null;
+    }
+}
+
+async function fetchMETAR(icao) {
+    try {
+        const response = await fetch(`https://api.checkwx.com/metar/${icao}/decoded`, {
+            headers: {
+                'X-API-Key': '0959c4a55b0b435492fd2b09db59cffb'
+            }
+        });
+        const data = await response.json();
+        
+        if (data.data && data.data.length > 0) {
+            return data.data[0];
+        }
+        return null;
+    } catch (error) {
+        console.error('Error fetching METAR:', error);
+        return null;
+    }
+}
+
+function addSyncButton() {
+    const icaoGroup = document.querySelector('#icao').parentNode;
+    const syncButton = document.createElement('button');
+    syncButton.id = 'sync-airport';
+    syncButton.type = 'button';
+    syncButton.innerHTML = '🔄 Синхронизировать';
+    syncButton.classList.add('sync-button');
+    icaoGroup.appendChild(syncButton);
+    
+    syncButton.addEventListener('click', async function() {
+        const icao = document.getElementById('icao').value.trim().toUpperCase();
+        if (!icao || icao.length !== 4) {
+            showError(currentLanguage === 'ru' ? 
+                'Введите корректный ICAO код (4 буквы)' : 
+                'Enter valid ICAO code (4 letters)');
+            return;
+        }
+        
+        syncButton.disabled = true;
+        syncButton.innerHTML = '<span class="loading"></span> Загрузка...';
+        
+        try {
+            const [airportData, metarData] = await Promise.all([
+                fetchAirportData(icao),
+                fetchMETAR(icao)
+            ]);
+            
+            if (!airportData && !metarData) {
+                throw new Error(currentLanguage === 'ru' ? 
+                    'Данные аэропорта не найдены' : 
+                    'Airport data not found');
+            }
+            
+            if (airportData) {
+                document.getElementById('runway_length').value = airportData.runway_length || '';
+                document.getElementById('airport_elevation').value = airportData.elevation_ft || '';
+                
+                // Попробуем определить основную ВПП
+                if (airportData.runways && airportData.runways.length > 0) {
+                    const mainRunway = airportData.runways[0];
+                    document.getElementById('runway').value = mainRunway.le_ident || '';
+                    document.getElementById('runway_heading').value = mainRunway.le_heading_degT || '';
+                }
+            }
+            
+            if (metarData) {
+                document.getElementById('temperature').value = Math.round(metarData.temperature.celsius) || '';
+                document.getElementById('qnh').value = metarData.barometer.hpa || '';
+                document.getElementById('wind_direction').value = metarData.wind.degrees || '';
+                document.getElementById('wind_speed').value = metarData.wind.speed_kts || '';
+                
+                let condition = 'dry';
+                if (metarData.conditions && metarData.conditions.some(c => 
+                    c.code.includes('RA') || c.code.includes('DZ'))) {
+                    condition = 'wet';
+                } else if (metarData.conditions && metarData.conditions.some(c => 
+                    c.code.includes('SN') || c.code.includes('SG'))) {
+                    condition = 'snowy';
+                }
+                document.getElementById('runway_condition').value = condition;
+            }
+            
+            showSuccess(currentLanguage === 'ru' ? 
+                'Данные аэропорта успешно загружены' : 
+                'Airport data loaded successfully');
+                
+        } catch (error) {
+            showError(error.message);
+        } finally {
+            syncButton.disabled = false;
+            syncButton.innerHTML = '🔄 Синхронизировать';
+        }
+    });
+}
+
 async function loadTranslations() {
     try {
         const response = await fetch('translations.json');
@@ -57,6 +166,7 @@ function initializeTheme() {
     const savedTheme = localStorage.getItem('theme') || 
                       (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     document.documentElement.setAttribute('data-theme', savedTheme);
+    addSyncButton();
 }
 
 function calculateSpeeds() {
