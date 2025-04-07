@@ -155,6 +155,15 @@ function applyTranslations() {
     document.getElementById('footer-text').textContent = lang.footer;
 }
 
+function calculateFlexTemp(oat, tow, elevation, headwind) {
+    let flexTemp = oat + (MTOW - tow) / 1000 + (elevation / 1000) - (headwind / 5);
+    
+    flexTemp = Math.max(oat + 5, flexTemp);  
+    flexTemp = Math.min(oat + 50, flexTemp); 
+    
+    return Math.round(flexTemp);
+}
+
 function toggleTheme() {
     const currentTheme = document.documentElement.getAttribute('data-theme');
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
@@ -209,6 +218,12 @@ function calculateSpeeds() {
         const coef = FLAPS_COEF[formData.flaps_config];
         const weight_diff = MTOW - formData.tow;
         const correction = weight_diff * coef / 1000;
+        const oat = parseInt(document.getElementById('temperature').value) || 15;
+        const elevation = parseInt(document.getElementById('airport_elevation').value) || 0;
+        const headwind = windData.speed_kts || 0; 
+        document.getElementById('flex_temp').value = flexTemp;
+    
+        const flexTemp = calculateFlexTemp(oat, formData.tow, elevation, headwind);
 
         let V1 = V1_MTOW - correction;
         let VR = VR_MTOW - correction;
@@ -227,6 +242,11 @@ function calculateSpeeds() {
         const wind_correction = headwind * 0.3;
         V1 -= wind_correction;
         VR -= wind_correction;
+
+        const flexCorrection = (flexTemp - oat) * 0.3;
+        V1 += flexCorrection;
+        VR += flexCorrection;
+        V2 += flexCorrection;
         
         if (formData.runway_condition === "мокрая" || formData.runway_condition === "заснеженная" ||
             formData.runway_condition === "wet" || formData.runway_condition === "snowy") {
@@ -240,7 +260,7 @@ function calculateSpeeds() {
         VR = Math.max(Math.round(VR), 0);
         V2 = Math.max(Math.round(V2), 0);
 
-        const required_length = (V2 * 1.5) * 0.5144;  // Примерная формула
+        const required_length = (V2 * 1.5) * 0.5144; 
 
         displayResults(formData, {V1, VR, V2}, headwind, required_length);
         
