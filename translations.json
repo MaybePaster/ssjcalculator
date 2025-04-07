@@ -1,6 +1,6 @@
 {
   "ru": {
-    "title": "Калькулятор взлётных скоростей",
+    "title": "Калькулятор взлётных скоростей для SU95X",
     "aircraftParams": "Параметры самолёта",
     "tow": "Взлётная масса (TOW, кг):",
     "cg": "Центровка (%):",
@@ -43,7 +43,7 @@
     "towError": "TOW не может превышать MTOW (45880 кг)!"
   },
   "en": {
-    "title": "Takeoff Speed Calculator",
+    "title": "Takeoff Speed Calculator for SU95X",
     "aircraftParams": "Aircraft Parameters",
     "tow": "Takeoff Weight (TOW, kg):",
     "cg": "Center of Gravity (%):",
