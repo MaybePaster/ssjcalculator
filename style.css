@@ -318,7 +318,15 @@ footer {
     cursor: not-allowed;
 }
 
-/* Стили для сообщений */
+.calculated-value {
+    padding: 10px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
 .message {
     padding: 10px;
     border-radius: 6px;
