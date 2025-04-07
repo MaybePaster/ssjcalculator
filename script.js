@@ -1,7 +1,9 @@
-const MTOW = 45880; 
-const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143; 
-const FLAPS_COEF = {"1": 1.8, "2": 1.5}; 
+// Константы
+const MTOW = 45880;  // Максимальная взлётная масса (кг)
+const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143;  // Скорости для MTOW (узлы)
+const FLAPS_COEF = {"1": 1.8, "2": 1.5};  // Коэффициенты для Flaps 1+F и Flaps 2
 
+// Загрузка переводов
 let translations = {};
 let currentLanguage = 'ru';
 
@@ -19,6 +21,7 @@ function applyTranslations() {
     const lang = translations[currentLanguage];
     if (!lang) return;
 
+    // Обновляем все элементы с переводами
     document.getElementById('title').textContent = lang.title;
     document.getElementById('aircraft-params').textContent = lang.aircraftParams;
     document.getElementById('tow-label').textContent = lang.tow;
@@ -63,6 +66,7 @@ function calculateSpeeds() {
     errorElement.style.display = 'none';
     
     try {
+        // Получаем данные из формы
         const formData = {
             tow: parseFloat(document.getElementById('tow').value),
             cg: parseFloat(document.getElementById('cg').value),
@@ -79,6 +83,7 @@ function calculateSpeeds() {
             wind_speed: parseFloat(document.getElementById('wind_speed').value)
         };
 
+        // Валидация данных
         if (isNaN(formData.tow) || formData.tow <= 0) {
             throw new Error(translations[currentLanguage].error + ' ' + (currentLanguage === 'ru' ? 
                           'Взлётная масса должна быть положительным числом' : 
@@ -89,34 +94,42 @@ function calculateSpeeds() {
             throw new Error(translations[currentLanguage].error + ' ' + translations[currentLanguage].towError);
         }
 
+        // Расчёт эффективного ветра на ВПП
         let wind_angle = Math.abs(formData.wind_direction - formData.runway_heading) % 360;
         if (wind_angle > 180) {
             wind_angle = 360 - wind_angle;
         }
         const headwind = formData.wind_speed * Math.cos(wind_angle * Math.PI / 180);
 
+        // Основная коррекция по массе
         const coef = FLAPS_COEF[formData.flaps_config];
         const weight_diff = MTOW - formData.tow;
         const correction = weight_diff * coef / 1000;
 
+        // Базовая коррекция скоростей
         let V1 = V1_MTOW - correction;
         let VR = VR_MTOW - correction;
         let V2 = V2_MTOW - correction;
 
+        // Дополнительные корректировки
+        // 1. Высота аэропорта
         const altitude_correction = formData.airport_elevation / 1000 * 0.5;
         V1 += altitude_correction;
         VR += altitude_correction;
         V2 += altitude_correction;
         
+        // 2. Температура
         const temp_correction = (formData.temperature - 15) / 10 * 1.5;
         V1 += temp_correction;
         VR += temp_correction;
         V2 += temp_correction;
         
+        // 3. Ветер
         const wind_correction = headwind * 0.3;
         V1 -= wind_correction;
         VR -= wind_correction;
         
+        // 4. Состояние ВПП
         if (formData.runway_condition === "мокрая" || formData.runway_condition === "заснеженная" ||
             formData.runway_condition === "wet" || formData.runway_condition === "snowy") {
             const condition_correction = formData.runway_condition === "мокрая" || formData.runway_condition === "wet" ? 3 : 5;
@@ -125,12 +138,15 @@ function calculateSpeeds() {
             V2 += condition_correction;
         }
 
+        // Округление и проверка минимальных значений
         V1 = Math.max(Math.round(V1), 0);
         VR = Math.max(Math.round(VR), 0);
         V2 = Math.max(Math.round(V2), 0);
 
+        // Проверка длины ВПП
         const required_length = (V2 * 1.5) * 0.5144;  // Примерная формула
 
+        // Показываем результаты
         displayResults(formData, {V1, VR, V2}, headwind, required_length);
         
     } catch (error) {
@@ -146,6 +162,7 @@ function displayResults(data, speeds, headwind, required_length) {
     const runwayWarning = required_length > data.runway_length ? 
         `<span class="warning">${lang.notEnough}</span>` : '';
     
+    // Генерация HTML с результатами
     resultsDiv.innerHTML = `
         <h2>${lang.results}</h2>
         
@@ -204,11 +221,15 @@ function displayResults(data, speeds, headwind, required_length) {
     resultsDiv.scrollIntoView({ behavior: 'smooth' });
 }
 
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
+    // Загрузка переводов
     loadTranslations();
     
+    // Инициализация темы
     initializeTheme();
     
+    // Обработчики событий
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
     
     document.getElementById('language-select').addEventListener('change', function() {
@@ -221,6 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
         calculateSpeeds();
     });
     
+    // Установка текущего года в подвале
     const year = new Date().getFullYear();
     document.getElementById('footer-text').textContent += ` | ${year}`;
 });
