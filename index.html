@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор взлётных скоростей</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>✈️ Калькулятор взлётных скоростей</h1>
+        
+        <div id="error" class="error"></div>
+        
+        <form id="calculator-form">
+            <div class="form-section">
+                <h2>Параметры самолёта</h2>
+                
+                <div class="form-group">
+                    <label for="tow">Взлётная масса (TOW, кг):</label>
+                    <input type="number" step="0.1" id="tow" name="tow" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cg">Центровка (%):</label>
+                    <input type="number" step="0.1" id="cg" name="cg" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="flaps_config">Конфигурация закрылков:</label>
+                    <select id="flaps_config" name="flaps_config" required>
+                        <option value="1">Flaps 1+F</option>
+                        <option value="2" selected>Flaps 2</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h2>Параметры аэропорта</h2>
+                
+                <div class="form-group">
+                    <label for="icao">ICAO аэропорта:</label>
+                    <input type="text" id="icao" name="icao" required placeholder="UUEE">
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway">ВПП (например, 08L):</label>
+                    <input type="text" id="runway" name="runway" required placeholder="14L">
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway_length">Длина ВПП (м):</label>
+                    <input type="number" id="runway_length" name="runway_length" required value="3500">
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway_heading">Курс ВПП (deg):</label>
+                    <input type="number" id="runway_heading" name="runway_heading" required value="140">
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway_condition">Состояние ВПП:</label>
+                    <select id="runway_condition" name="runway_condition" required>
+                        <option value="сухая" selected>Сухая</option>
+                        <option value="мокрая">Мокрая</option>
+                        <option value="заснеженная">Заснеженная</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="airport_elevation">Высота аэропорта (футы):</label>
+                    <input type="number" id="airport_elevation" name="airport_elevation" required value="500">
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h2>Метеорологические условия</h2>
+                
+                <div class="form-group">
+                    <label for="qnh">QNH (гПа):</label>
+                    <input type="number" step="0.1" id="qnh" name="qnh" required value="1013.2">
+                </div>
+                
+                <div class="form-group">
+                    <label for="temperature">Температура (°C):</label>
+                    <input type="number" step="0.1" id="temperature" name="temperature" required value="15">
+                </div>
+                
+                <div class="form-group">
+                    <label for="wind_direction">Направление ветра (deg):</label>
+                    <input type="number" id="wind_direction" name="wind_direction" required value="140">
+                </div>
+                
+                <div class="form-group">
+                    <label for="wind_speed">Скорость ветра (узлы):</label>
+                    <input type="number" step="0.1" id="wind_speed" name="wind_speed" required value="5">
+                </div>
+            </div>
+            
+            <button type="submit">Рассчитать скорости</button>
+        </form>
+        
+        <div id="results" class="result-section" style="display: none;">
+            <!-- Результаты будут вставлены сюда через JavaScript -->
+        </div>
+    </div>
+    
+    <footer>
+        <p>Калькулятор взлётных скоростей v1.0 | Для учебных целей</p>
+    </footer>
+    
+    <script src="script.js"></script>
+</body>
+</html>
