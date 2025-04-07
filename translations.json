@@ -7,6 +7,7 @@
     "flapsConfig": "Конфигурация закрылков:",
     "flaps1": "Flaps 1+F",
     "flaps2": "Flaps 2",
+    "flaps3": "Flaps 3",
     "airportParams": "Параметры аэропорта",
     "icao": "ICAO аэропорта:",
     "runway": "ВПП (например, 08L):",
@@ -37,7 +38,7 @@
     "headwind": "Встречный ветер",
     "reqLength": "Требуемая длина ВПП",
     "notEnough": "(Недостаточно!)",
-    "footer": "Калькулятор взлётных скоростей v1.0 | Для учебных целей",
+    "footer": "Калькулятор взлётных скоростей v1.0 | ТОЛЬКО ДЛЯ АВИАСИМУЛЯТОРОВ",
     "error": "Ошибка:",
     "towError": "TOW не может превышать MTOW (45880 кг)!"
   },
@@ -49,6 +50,7 @@
     "flapsConfig": "Flaps Configuration:",
     "flaps1": "Flaps 1+F",
     "flaps2": "Flaps 2",
+    "flaps3": "Flaps 3",
     "airportParams": "Airport Parameters",
     "icao": "ICAO Code:",
     "runway": "Runway (e.g. 08L):",
@@ -79,7 +81,7 @@
     "headwind": "Headwind",
     "reqLength": "Required Runway Length",
     "notEnough": "(Not enough!)",
-    "footer": "Takeoff Speed Calculator v1.0 | For educational purposes",
+    "footer": "Takeoff Speed Calculator v1.0 | ONLY FOR SIMULATOR",
     "error": "Error:",
     "towError": "TOW cannot exceed MTOW (45880 kg)!"
   }
