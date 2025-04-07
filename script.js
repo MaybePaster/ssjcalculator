@@ -2,7 +2,7 @@
 const MTOW = 45880;  // Максимальная взлётная масса (кг)
 const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143;  // Скорости для MTOW (узлы)
 const FLAPS_COEF = {"1": 1.8, "2": 1.5, "3": 1.2};
-const FLEX_COEF = 0.3;
+const MAX_FLEX_DELTA = 55;
 const THS_COEF = 0.2;
 
 // API Keys (в продакшене используйте бэкенд для хранения ключей)
@@ -127,10 +127,12 @@ function updateYear() {
         translations[currentLanguage]?.footer + ` | ${year}`;
 }
 
-// Расчёт FLEX температуры
 function calculateFlexTemp(oat, tow, elevation, headwind) {
-    let flexTemp = oat + (MTOW - tow) / 1000 + (elevation / 1000) - (headwind / 5);
-    flexTemp = Math.max(oat + 5, Math.min(oat + 50, flexTemp));
+    let flexTemp = oat + (MTOW - tow) / 1000 + (elevation / 2000) - (headwind / 10);
+    
+    flexTemp = Math.min(oat + MAX_FLEX_DELTA, flexTemp); // Не выше максимального
+    flexTemp = Math.max(oat + 5, flexTemp); // Минимум OAT+5
+    
     return Math.round(flexTemp);
 }
 
@@ -285,6 +287,8 @@ function calculateSpeeds() {
             headwind
         );
         document.getElementById('flex_temp_display').textContent = `${flexTemp} °C`;
+        const flexCorrection = (flexTemp - formData.temperature) * 0.2;
+        
         
         const speeds = calculateFinalSpeeds(formData, headwind, flexTemp);
         const requiredLength = (speeds.V2 * 1.5) * 0.5144;
@@ -338,8 +342,9 @@ function validateInputData(data) {
 
 // Расчёт итоговых скоростей
 function calculateFinalSpeeds(data, headwind, flexTemp) {
-    const coef = FLAPS_COEF[data.flaps_config];
-    const massCorrection = (MTOW - data.tow) * coef / 1000;
+    const coef = FLAPS_COEF[formData.flaps_config];
+    const massCorrection = (MTOW - formData.tow) * coef / 1000;
+    
     
     let V1 = V1_MTOW - massCorrection;
     let VR = VR_MTOW - massCorrection;
@@ -353,6 +358,10 @@ function calculateFinalSpeeds(data, headwind, flexTemp) {
     V1 += tempCorrection - windCorrection + flexCorrection;
     VR += tempCorrection - windCorrection + flexCorrection;
     V2 += tempCorrection - windCorrection + flexCorrection;
+
+    let V1 = V1_MTOW - massCorrection + flexCorrection;
+    let VR = VR_MTOW - massCorrection + flexCorrection;
+    let V2 = V2_MTOW - massCorrection + flexCorrection;
     
     // Состояние ВПП
     if (data.runway_condition === "wet" || data.runway_condition === "мокрая") {
@@ -449,6 +458,19 @@ function displayResults(data, speeds, headwind, requiredLength, flexTemp) {
             </tr>
             ${thsRow}
         </table>
+    `;
+    resultsTable += `
+        <tr>
+            <th>${currentLanguage === 'ru' ? 'FLEX TO TEMP' : 'FLEX TEMP'}</th>
+            <td>${flexTemp} °C (${flexTemp - data.temperature}° ${currentLanguage === 'ru' ? 'над OAT' : 'above OAT'})</td>
+        </tr>
+        <tr>
+            <th>${currentLanguage === 'ru' ? 'Режим тяги' : 'Thrust mode'}</th>
+            <td>${flexTemp - data.temperature >= MAX_FLEX_DELTA - 5 ? 
+                (currentLanguage === 'ru' ? 'TOGA' : 'TOGA') : 
+                (currentLanguage === 'ru' ? 'Flex' : 'Flex')}
+            </td>
+        </tr>
     `;
     
     resultsDiv.style.display = 'block';
