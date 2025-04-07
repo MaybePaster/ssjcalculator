@@ -41,6 +41,12 @@
     "footer": "Калькулятор взлётных скоростей v1.0 | ТОЛЬКО ДЛЯ АВИАСИМУЛЯТОРОВ",
     "error": "Ошибка:",
     "towError": "TOW не может превышать MTOW (45880 кг)!"
+    "flexTemp": "FLEX TO TEMP (°C):",
+    "thsSetting": "FLAP/THS:",
+    "thsAuto": "Авто",
+    "thsManual": "Ручной",
+    "thsValue": "Значение THS:",
+    "flexNote": "Примечание: FLEX TO TEMP должно быть выше OAT"
   },
   "en": {
     "title": "Takeoff Speed Calculator for SU95X",
@@ -84,5 +90,11 @@
     "footer": "Takeoff Speed Calculator v1.0 | ONLY FOR SIMULATOR",
     "error": "Error:",
     "towError": "TOW cannot exceed MTOW (45880 kg)!"
+    "flexTemp": "FLEX TO TEMP (°C):",
+    "thsSetting": "FLAP/THS:",
+    "thsAuto": "Auto",
+    "thsManual": "Manual",
+    "thsValue": "THS Value:",
+    "flexNote": "Note: FLEX TO TEMP must be higher than OAT"
   }
 }
