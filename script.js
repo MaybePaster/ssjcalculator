@@ -1,9 +1,11 @@
-// Константы
-const MTOW = 45880;  // Максимальная взлётная масса (кг)
-const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143;  // Скорости для MTOW (узлы)
+const MTOW = 45880; // Максимальная взлётная масса (кг)
+const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143; // Скорости для MTOW (узлы)
 const FLAPS_COEF = {"1": 1.8, "2": 1.5, "3": 1.2};
-const MAX_FLEX_DELTA = 55;
 const THS_COEF = 0.2;
+const ISA_TEMP = 15; // Стандартная температура ISA на уровне моря
+const ISA_LAPSE_RATE = 1.98; // Градиент температуры ISA (°C/1000ft)
+const MAX_FLEX_DELTA = 50; // Максимальная разница FLEX (обычно 50°C для Airbus)
+const MIN_FLEX_DELTA = 5; // Минимальная разница FLEX
 
 // API Keys (в продакшене используйте бэкенд для хранения ключей)
 const AVIATIONSTACK_API_KEY = '058b895d683b4bef5819cd0f46e13b68';
@@ -127,13 +129,31 @@ function updateYear() {
         translations[currentLanguage]?.footer + ` | ${year}`;
 }
 
-function calculateFlexTemp(oat, tow, elevation, headwind) {
-    let flexTemp = oat + (MTOW - tow) / 1000 + (elevation / 2000) - (headwind / 10);
+function calculateFlexTemp(oat, elevation) {
+    // 1. Коррекция ISA для высоты аэропорта
+    const isaCorrection = (elevation / 1000) * ISA_LAPSE_RATE;
+    const isaTemp = ISA_TEMP - isaCorrection;
     
-    flexTemp = Math.min(oat + MAX_FLEX_DELTA, flexTemp); // Не выше максимального
-    flexTemp = Math.max(oat + 5, flexTemp); // Минимум OAT+5
+    // 2. Расчёт FLEX температуры
+    let flexTemp = oat + isaTemp;
     
-    return Math.round(flexTemp);
+    // 3. Ограничения и округление
+    flexTemp = Math.min(oat + MAX_FLEX_DELTA, flexTemp); // Не выше OAT+50
+    flexTemp = Math.max(oat + MIN_FLEX_DELTA, flexTemp); // Минимум OAT+5
+    flexTemp = Math.floor(flexTemp); // Округление вниз
+    
+    return flexTemp;
+}
+
+function determineThrustMode(flexTemp, oat, runwayLength, tow, elevation) {
+    // Условия, когда нельзя использовать FLEX (нужен TOGA)
+    const isCriticalCondition = 
+        (flexTemp >= oat + MAX_FLEX_DELTA - 5) || // FLEX близок к максимуму
+        (tow > MTOW * 0.95) || // Высокая масса
+        (runwayLength < 2000) || // Короткая ВПП
+        (elevation > 5000); // Высокогорный аэропорт
+    
+    return isCriticalCondition ? 'TOGA' : 'FLEX';
 }
 
 // Синхронизация данных аэропорта
@@ -269,27 +289,33 @@ function fillAirportData(data) {
 
 // Расчёт скоростей
 function calculateSpeeds() {
+    const formData = getFormData();
     const errorElement = document.getElementById('error');
     errorElement.style.display = 'none';
     
     try {
-        const formData = getFormData();
         validateInputData(formData);
         
         const windAngle = Math.abs(formData.wind_direction - formData.runway_heading) % 360;
         const effectiveWindAngle = windAngle > 180 ? 360 - windAngle : windAngle;
         const headwind = formData.wind_speed * Math.cos(effectiveWindAngle * Math.PI / 180);
         
-        const flexTemp = calculateFlexTemp(
+        const flexTemp = calculateFlexTemp(formData.temperature, formData.airport_elevation);
+        const thrustMode = determineThrustMode(
+            flexTemp,
             formData.temperature,
+            formData.runway_length,
             formData.tow,
-            formData.airport_elevation,
-            headwind
+            formData.airport_elevation
         );
+        
         document.getElementById('flex_temp_display').textContent = `${flexTemp} °C`;
-        const flexCorrection = (flexTemp - formData.temperature) * 0.2;
+        document.getElementById('thrust_mode_display').textContent = thrustMode;
+        const flexCorrection = thrustMode === 'FLEX' ? 
+            (flexTemp - formData.temperature) * 0.2 : 0;
         
-        
+        const coef = FLAPS_COEF[formData.flaps_config];
+        const massCorrection = (MTOW - formData.tow) * coef / 1000;
         const speeds = calculateFinalSpeeds(formData, headwind, flexTemp);
         const requiredLength = (speeds.V2 * 1.5) * 0.5144;
         
@@ -472,9 +498,32 @@ function displayResults(data, speeds, headwind, requiredLength, flexTemp) {
             </td>
         </tr>
     `;
+    let resultsHTML = `
+        <h2>${isRussian ? 'Результаты расчёта' : 'Calculation Results'}</h2>
+        <div class="speeds">
+            <!-- Блоки скоростей -->
+        </div>
+        <h3>${isRussian ? 'Параметры взлёта' : 'Takeoff Parameters'}</h3>
+        <table>
+            <!-- Основные параметры -->
+            <tr>
+                <th>FLEX TO TEMP</th>
+                <td>${flexTemp} °C (${flexDelta}° ${isRussian ? 'над OAT' : 'above OAT'})</td>
+            </tr>
+            <tr>
+                <th>${isRussian ? 'Режим тяги' : 'Thrust mode'}</th>
+                <td>${thrustMode} ${thrustMode === 'FLEX' ? 
+                    isRussian ? '(пониженная тяга)' : '(reduced thrust)' : 
+                    isRussian ? '(полная тяга)' : '(full thrust)'}</td>
+            </tr>
+            <!-- Остальные параметры -->
+        </table>
+    `;
     
     resultsDiv.style.display = 'block';
     resultsDiv.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('results').innerHTML = resultsHTML;
+    document.getElementById('results').style.display = 'block';
 }
 
 // Показать сообщение об ошибке
