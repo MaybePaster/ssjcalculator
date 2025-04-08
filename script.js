@@ -186,27 +186,118 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Fetch METAR from aviationweather.gov API
     async function fetchMetar(icao) {
-        try {
-            const response = await fetch(`https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`);
-            const data = await response.json();
+    try {
+        // Try aviationapi.com first (no API key required)
+        let apiUrl = `https://api.aviationapi.com/v1/weather/metar?apt=${icao}`;
+        
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        
+        if (!data || !data[icao] || data[icao].length === 0) {
+            // Fallback to CheckWX API (requires API key - use a free one)
+            apiUrl = `https://api.checkwx.com/metar/${icao}/decoded`;
+            const wxResponse = await fetch(apiUrl, {
+                headers: {
+                    'X-API-Key': '0959c4a55b0b435492fd2b09db59cffb' // Replace with your free API key
+                }
+            });
+            const wxData = await wxResponse.json();
             
-            if (data.length === 0 || !data[0].rawOb) {
+            if (wxData.data && wxData.data.length > 0) {
+                processMetarData(wxData.data[0]);
+            } else {
                 throw new Error("No METAR data found");
             }
-            
-            const metar = data[0].rawOb;
-            metarRaw.value = metar;
-            
-            // Parse METAR (simplified parsing)
-            parseMetar(metar);
-            
-        } catch (error) {
-            console.error("Error fetching METAR:", error);
-            metarRaw.value = currentLang === 'en' ? "Error fetching METAR data" : "Ошибка получения данных METAR";
-            clearMetarFields();
+        } else {
+            processMetarData(data[icao][0]);
         }
+    } catch (error) {
+        console.error("Error fetching METAR:", error);
+        metarRaw.value = currentLang === 'en' 
+            ? "Error fetching METAR data" 
+            : "Ошибка получения данных METAR";
+        clearMetarFields();
+    }
+}
+    
+    function processMetarData(metarData) {
+    // Reset fields
+    clearMetarFields();
+    
+    // Set raw METAR
+    if (metarData.raw_text) {
+        metarRaw.value = metarData.raw_text;
+    } else if (metarData.metar) {
+        metarRaw.value = metarData.metar;
     }
     
+    // Wind information
+    if (metarData.wind) {
+        const windDir = metarData.wind.degrees || 'VRB';
+        const windSpeed = metarData.wind.speed_kts;
+        let windGust = '';
+        if (metarData.wind.gust_kts) {
+            windGust = `G${metarData.wind.gust_kts}`;
+        }
+        metarWind.value = `${windDir}°/${windSpeed}${windGust}`;
+    }
+    
+    // Visibility
+    if (metarData.visibility) {
+        metarVisibility.value = metarData.visibility.meters || 
+                              (metarData.visibility.miles * 1609.34).toFixed(0);
+    }
+    
+    // Weather phenomena
+    if (metarData.conditions && metarData.conditions.length > 0) {
+        metarWeather.value = metarData.conditions.join(', ');
+    }
+    
+    // Clouds
+    if (metarData.clouds && metarData.clouds.length > 0) {
+        metarClouds.value = metarData.clouds.map(cloud => 
+            `${cloud.code}${cloud.base_feet_agl ? `@${cloud.base_feet_agl*100}ft` : ''}`
+        ).join(', ');
+    }
+    
+    // Temperature
+    if (metarData.temperature) {
+        const tempC = metarData.temperature.celsius;
+        metarTemp.value = tempC;
+        // Update OAT field if temperature is found
+        oatInput.value = tempC;
+    }
+    
+    // Altimeter (QNH)
+    if (metarData.barometer) {
+        metarQnh.value = metarData.barometer.hpa || 
+                        (metarData.barometer.hg * 33.8639).toFixed(0);
+    }
+    
+    // Update runway condition based on weather
+    updateRunwayCondition(metarData);
+}
+
+    function updateRunwayCondition(metarData) {
+    if (!metarData.conditions) return;
+    
+    const conditions = metarData.conditions.join(' ');
+    const runwaySelect = document.getElementById('runwayCondition');
+    
+    if (conditions.includes('SN') || conditions.includes('SG') || 
+        conditions.includes('PL') || conditions.includes('IC')) {
+        runwaySelect.value = 'contaminated';
+    } else if (conditions.includes('RA') || conditions.includes('DZ') || 
+               conditions.includes('SH') || conditions.includes('TS')) {
+        runwaySelect.value = 'wet';
+    }
+    
+    // Update language if changed
+    const lang = translations[currentLang];
+    runwaySelect.options[0].text = lang.runwayConditions.dry;
+    runwaySelect.options[1].text = lang.runwayConditions.wet;
+    runwaySelect.options[2].text = lang.runwayConditions.contaminated;
+}
     // Simplified METAR parser
     function parseMetar(metar) {
         // Reset fields
