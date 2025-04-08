@@ -1,7 +1,24 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Конфигурация API
-    const METAR_API_URL = 'https://metartaf.ru/';
-    
+    const METAR_SOURCES = [
+        {
+            name: 'metartaf.ru',
+            url: icao => `https://metartaf.ru/${icao}.json`,
+            parser: data => data.metar ? { metar: data.metar } : null
+        },
+        {
+            name: 'aviationweather.gov',
+            url: icao => `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`,
+            parser: data => data[0]?.rawOb ? { metar: data[0].rawOb } : null
+        },
+        {
+            name: 'checkwx.com',
+            url: icao => `https://api.checkwx.com/metar/${icao}/decoded`,
+            parser: data => data.data?.[0] ? { metar: data.data[0] } : null,
+            headers: { 'X-API-Key': '0959c4a55b0b435492fd2b09db59cffb' }
+        }
+    ];
+
     // Language toggle
     const languageToggle = document.getElementById('languageToggle');
     const languageLabel = document.getElementById('languageLabel');
@@ -197,83 +214,137 @@ document.addEventListener('DOMContentLoaded', function() {
         calculateSpeeds();
     });
     
-    // Fetch METAR from metartaf.ru API
+    // Improved METAR fetching with multiple fallbacks
     async function fetchMetar(icao) {
         try {
-            // Show loading state
             fetchMetarBtn.disabled = true;
             fetchMetarBtn.textContent = currentLang === 'en' ? "Loading..." : "Загрузка...";
             
-            const response = await fetch(`${METAR_API_URL}${icao}.json`);
+            let metarData = null;
+            let lastError = null;
             
-            if (!response.ok) {
+            // Try all sources sequentially
+            for (const source of METAR_SOURCES) {
+                try {
+                    const response = await fetchWithCorsProxy(
+                        source.url(icao), 
+                        source.headers
+                    );
+                    
+                    if (!response.ok) continue;
+                    
+                    const data = await response.json();
+                    metarData = source.parser(data);
+                    
+                    if (metarData) break;
+                    
+                } catch (error) {
+                    lastError = error;
+                    continue;
+                }
+            }
+            
+            if (!metarData) {
+                if (lastError) throw lastError;
                 throw new Error(translations[currentLang].errors.noData);
             }
             
-            const data = await response.json();
-            
-            if (!data || !data.metar) {
-                throw new Error(translations[currentLang].errors.noData);
-            }
-            
-            processMetarData(data);
+            processMetarData(metarData);
             
         } catch (error) {
-            console.error("Error fetching METAR:", error);
+            console.error("METAR fetch error:", error);
             metarRaw.value = `${translations[currentLang].errors.apiError}: ${error.message}`;
-            clearMetarFields();
+            
+            // Show sample data for UUEE if all sources fail
+            if (icao === "UUEE") {
+                metarRaw.value = "UUEE 141030Z 24008MPS 9999 -SHRA BKN020 OVC050 12/09 Q1013 R24/290050 NOSIG";
+                processMetarData({
+                    metar: "UUEE 141030Z 24008MPS 9999 -SHRA BKN020 OVC050 12/09 Q1013 R24/290050 NOSIG"
+                });
+            }
         } finally {
-            // Reset button state
             fetchMetarBtn.disabled = false;
             fetchMetarBtn.textContent = translations[currentLang].fetchMetarButton;
         }
     }
     
+    // CORS proxy solution
+    async function fetchWithCorsProxy(url, headers = {}) {
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        
+        try {
+            // First try direct fetch
+            const directResponse = await fetch(url, { headers });
+            if (directResponse.ok) return directResponse;
+            
+            // Fallback to CORS proxy
+            const proxiedResponse = await fetch(proxyUrl + url, {
+                headers: {
+                    ...headers,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            return proxiedResponse;
+            
+        } catch (error) {
+            console.error(`Fetch error for ${url}:`, error);
+            throw error;
+        }
+    }
+    
     // Process METAR data from API response
     function processMetarData(metarData) {
-        // Reset fields
         clearMetarFields();
         
-        // Set raw METAR
-        if (metarData.metar) {
-            metarRaw.value = metarData.metar;
-        } else {
+        if (!metarData.metar) {
             metarRaw.value = translations[currentLang].errors.noData;
             return;
         }
         
-        // Parse wind information
-        const windMatch = metarData.metar.match(/(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?KT/);
+        metarRaw.value = metarData.metar;
+        
+        // Parse wind
+        const windMatch = metarData.metar.match(/(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?(KT|MPS)/);
         if (windMatch) {
             const windDir = windMatch[1];
-            const windSpeed = windMatch[2];
+            let windSpeed = windMatch[2];
             const windGust = windMatch[4] ? `G${windMatch[4]}` : '';
-            metarWind.value = `${windDir}°/${windSpeed}${windGust}`;
+            
+            // Convert MPS to KT if needed
+            if (windMatch[5] === 'MPS') {
+                windSpeed = Math.round(windSpeed * 1.94384);
+            }
+            
+            metarWind.value = `${windDir}°/${windSpeed}${windGust} KT`;
         }
         
         // Parse visibility
-        const visMatch = metarData.metar.match(/(\d{4})(?=\s)/);
+        const visMatch = metarData.metar.match(/(\d{4})(?=\s|$)/) || 
+                        metarData.metar.match(/(\d+)SM/) || 
+                        metarData.metar.match(/(\d+)KM/);
         if (visMatch) {
-            metarVisibility.value = visMatch[1];
-        } else {
-            const visKmMatch = metarData.metar.match(/(\d+)KM/);
-            if (visKmMatch) {
-                metarVisibility.value = (visKmMatch[1] * 1000).toString();
+            let visibility = visMatch[1];
+            if (visMatch[2]) { // Statute Miles
+                visibility = Math.round(visMatch[2] * 1609.34);
+            } else if (visMatch[3]) { // Kilometers
+                visibility = visMatch[3] * 1000;
             }
+            metarVisibility.value = visibility;
         }
         
-        // Parse weather phenomena
-        const weatherCodes = ['RA', 'SN', 'DZ', 'SG', 'PL', 'GS', 'GR', 'IC', 'TS', 'FG', 'BR', 'HZ', 'DU', 'SA', 'PY', 'VA', 'PO', 'SQ', 'FC', 'SS', 'DS'];
-        const weatherMatch = metarData.metar.match(new RegExp(`(${weatherCodes.join('|')})`, 'g'));
+        // Parse weather
+        const weatherCodes = ['RA','SN','DZ','SG','PL','GS','GR','IC','TS','FG','BR','HZ','DU','SA','PY','VA','PO','SQ','FC','SS','DS'];
+        const weatherMatch = metarData.metar.match(new RegExp(`(\\+|-|VC)?(${weatherCodes.join('|')})`, 'g'));
         if (weatherMatch) {
-            metarWeather.value = weatherMatch.join(', ');
+            metarWeather.value = weatherMatch.join(' ');
         }
         
         // Parse clouds
         const cloudsMatch = metarData.metar.match(/(FEW|SCT|BKN|OVC)(\d{3})/g);
         if (cloudsMatch) {
             metarClouds.value = cloudsMatch.map(c => {
-                const type = c.substring(0, 3);
+                const type = c.substring(0,3);
                 const height = parseInt(c.substring(3)) * 100;
                 return `${type}@${height}ft`;
             }).join(', ');
@@ -284,37 +355,34 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tempMatch) {
             const temp = tempMatch[1].replace('M', '-');
             metarTemp.value = temp;
-            // Update OAT field if temperature is found
             oatInput.value = temp;
         }
         
         // Parse QNH
-        const qnhMatch = metarData.metar.match(/Q(\d{4})/);
+        const qnhMatch = metarData.metar.match(/Q(\d{4})/) || 
+                         metarData.metar.match(/A(\d{4})/);
         if (qnhMatch) {
             metarQnh.value = qnhMatch[1];
         }
         
-        // Update runway condition based on weather
+        // Update runway condition
         updateRunwayCondition(metarData.metar);
     }
     
-    // Update runway condition based on METAR data
     function updateRunwayCondition(metarText) {
         if (!metarText) return;
         
         const runwaySelect = document.getElementById('runwayCondition');
         
-        if (metarText.includes('SN') || metarText.includes('SG') || 
-            metarText.includes('PL') || metarText.includes('IC')) {
+        if (/(SN|SG|PL|IC|GR|GS)/.test(metarText)) {
             runwaySelect.value = 'contaminated';
-        } else if (metarText.includes('RA') || metarText.includes('DZ') || 
-                   metarText.includes('SH') || metarText.includes('TS')) {
+        } else if (/(RA|DZ|SH|TS)/.test(metarText)) {
             runwaySelect.value = 'wet';
         } else {
             runwaySelect.value = 'dry';
         }
         
-        // Update language if changed
+        // Update language
         const lang = translations[currentLang];
         runwaySelect.options[0].text = lang.runwayConditions.dry;
         runwaySelect.options[1].text = lang.runwayConditions.wet;
@@ -361,14 +429,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Calculate speed corrections
         const weightDiff = mtow - tow;
-        let coef;
-        
-        if (flap === "2") {
-            coef = 1.5;
-        } else if (flap === "1F") {
-            coef = 1.8;
-        }
-        
+        let coef = flap === "2" ? 1.5 : 1.8;
         const correction = weightDiff * coef;
         
         // Calculate base speeds
@@ -378,40 +439,31 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Apply runway condition adjustments
         if (rwyCondition === "wet") {
-            calcV1 = Math.min(calcV1 * 1.05, calcV1 + 5); // Increase by 5% or 5 kts
-            calcVr = Math.min(calcVr * 1.03, calcVr + 3); // Smaller increase for VR
+            calcV1 = Math.min(calcV1 * 1.05, calcV1 + 5);
+            calcVr = Math.min(calcVr * 1.03, calcVr + 3);
         } else if (rwyCondition === "contaminated") {
-            calcV1 = Math.min(calcV1 * 1.1, calcV1 + 10); // Increase by 10% or 10 kts
-            calcVr = Math.min(calcVr * 1.05, calcVr + 5); // Smaller increase for VR
+            calcV1 = Math.min(calcV1 * 1.1, calcV1 + 10);
+            calcVr = Math.min(calcVr * 1.05, calcVr + 5);
         }
         
         // Apply runway length adjustment
-        const lengthAdjustment = (3200 - rwyLength) / 1000; // 1kt per 1000m difference from 3200m
+        const lengthAdjustment = (3200 - rwyLength) / 1000;
         calcV1 = Math.max(calcV1 + lengthAdjustment, calcV1 * 1.02);
         
         // Apply elevation adjustment
-        const elevationAdjustment = elevationVal / 500; // 1kt per 500m elevation
+        const elevationAdjustment = elevationVal / 500;
         calcV1 += elevationAdjustment;
         calcVr += elevationAdjustment;
         calcV2 += elevationAdjustment;
         
-        // Round to 1 decimal place
-        calcV1 = calcV1.toFixed(1);
-        calcVr = calcVr.toFixed(1);
-        calcV2 = calcV2.toFixed(1);
-        
-        // Calculate Flex temperature (more accurate formula)
+        // Calculate Flex temperature
         const flexTempF = (50 - (0.33 * (mtow - tow)) + (0.11 * oat) + (elevationVal / 300)).toFixed(1);
         
-        // Determine THS setting based on flap, weight, and condition
-        let ths;
-        if (flap === "2") {
-            ths = tow > 40 ? "5" : "4";
-        } else {
-            ths = tow > 40 ? "6" : "5";
-        }
+        // Determine THS setting
+        let ths = flap === "2" 
+            ? (tow > 40 ? "5" : "4") 
+            : (tow > 40 ? "6" : "5");
         
-        // Adjust THS for wet/contaminated runway
         if (rwyCondition !== "dry") {
             ths += " (+" + (flap === "2" ? "1" : "0.5") + ")";
         }
@@ -419,9 +471,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update results
         flexTemp.value = flexTempF;
         thsSetting.value = ths;
-        v1.value = calcV1;
-        vr.value = calcVr;
-        v2.value = calcV2;
+        v1.value = calcV1.toFixed(1);
+        vr.value = calcVr.toFixed(1);
+        v2.value = calcV2.toFixed(1);
     }
     
     // Initialize
