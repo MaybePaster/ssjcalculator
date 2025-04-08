@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 apiUrl = `https://avwx.rest/api/metar/${icao}?options=info`;
                 const wxResponse = await fetch(apiUrl, {
                     headers: {
-                        'Authorization': 'Bearer yGg5peR7vKf_MaPkTjEIZYHoKj_NX4d8NfL0Leyghhc' // Replace with your AVWX API key
+                        'Authorization': 'Bearer YOUR_AVWX_API_KEY' // Replace with your AVWX API key
                     }
                 });
                 
