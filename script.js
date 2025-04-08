@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Конфигурация API
+    const METAR_API_URL = 'https://metartaf.ru/';
+    
     // Language toggle
     const languageToggle = document.getElementById('languageToggle');
     const languageLabel = document.getElementById('languageLabel');
@@ -194,44 +197,30 @@ document.addEventListener('DOMContentLoaded', function() {
         calculateSpeeds();
     });
     
-    // Fetch METAR from aviation API
+    // Fetch METAR from metartaf.ru API
     async function fetchMetar(icao) {
         try {
             // Show loading state
             fetchMetarBtn.disabled = true;
             fetchMetarBtn.textContent = currentLang === 'en' ? "Loading..." : "Загрузка...";
             
-            // Try AviationAPI first (no key required)
-            let apiUrl = `https://api.aviationapi.com/v1/weather/metar?apt=${icao}`;
+            const response = await fetch(`${METAR_API_URL}${icao}.json`);
             
-            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error(translations[currentLang].errors.noData);
+            }
+            
             const data = await response.json();
             
-            if (!data || !data[icao] || data[icao].length === 0) {
-                // Fallback to CheckWX API (requires API key)
-                apiUrl = `https://avwx.rest/api/metar/${icao}?options=info`;
-                const wxResponse = await fetch(apiUrl, {
-                    headers: {
-                        'Authorization': 'Bearer YOUR_AVWX_API_KEY' // Replace with your AVWX API key
-                    }
-                });
-                
-                if (!wxResponse.ok) throw new Error("API error");
-                
-                const wxData = await wxResponse.json();
-                
-                if (wxData.error) {
-                    throw new Error(wxData.error);
-                }
-                
-                processMetarData(wxData);
-            } else {
-                processMetarData(data[icao][0]);
+            if (!data || !data.metar) {
+                throw new Error(translations[currentLang].errors.noData);
             }
+            
+            processMetarData(data);
             
         } catch (error) {
             console.error("Error fetching METAR:", error);
-            metarRaw.value = translations[currentLang].errors.apiError + ": " + error.message;
+            metarRaw.value = `${translations[currentLang].errors.apiError}: ${error.message}`;
             clearMetarFields();
         } finally {
             // Reset button state
@@ -246,74 +235,83 @@ document.addEventListener('DOMContentLoaded', function() {
         clearMetarFields();
         
         // Set raw METAR
-        if (metarData.raw) {
-            metarRaw.value = metarData.raw;
-        } else if (metarData.metar) {
+        if (metarData.metar) {
             metarRaw.value = metarData.metar;
         } else {
             metarRaw.value = translations[currentLang].errors.noData;
             return;
         }
         
-        // Wind information
-        if (metarData.wind_direction && metarData.wind_speed) {
-            const windDir = metarData.wind_direction.value || 'VRB';
-            const windSpeed = metarData.wind_speed.value;
-            let windGust = '';
-            if (metarData.wind_gust) {
-                windGust = `G${metarData.wind_gust.value}`;
-            }
+        // Parse wind information
+        const windMatch = metarData.metar.match(/(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?KT/);
+        if (windMatch) {
+            const windDir = windMatch[1];
+            const windSpeed = windMatch[2];
+            const windGust = windMatch[4] ? `G${windMatch[4]}` : '';
             metarWind.value = `${windDir}°/${windSpeed}${windGust}`;
         }
         
-        // Visibility
-        if (metarData.visibility) {
-            metarVisibility.value = metarData.visibility.value || 
-                                  (metarData.visibility.miles * 1609.34).toFixed(0);
+        // Parse visibility
+        const visMatch = metarData.metar.match(/(\d{4})(?=\s)/);
+        if (visMatch) {
+            metarVisibility.value = visMatch[1];
+        } else {
+            const visKmMatch = metarData.metar.match(/(\d+)KM/);
+            if (visKmMatch) {
+                metarVisibility.value = (visKmMatch[1] * 1000).toString();
+            }
         }
         
-        // Weather phenomena
-        if (metarData.conditions && metarData.conditions.length > 0) {
-            metarWeather.value = metarData.conditions.map(c => c.value).join(', ');
+        // Parse weather phenomena
+        const weatherCodes = ['RA', 'SN', 'DZ', 'SG', 'PL', 'GS', 'GR', 'IC', 'TS', 'FG', 'BR', 'HZ', 'DU', 'SA', 'PY', 'VA', 'PO', 'SQ', 'FC', 'SS', 'DS'];
+        const weatherMatch = metarData.metar.match(new RegExp(`(${weatherCodes.join('|')})`, 'g'));
+        if (weatherMatch) {
+            metarWeather.value = weatherMatch.join(', ');
         }
         
-        // Clouds
-        if (metarData.clouds && metarData.clouds.length > 0) {
-            metarClouds.value = metarData.clouds.map(cloud => 
-                `${cloud.type}@${cloud.altitude}ft`
-            ).join(', ');
+        // Parse clouds
+        const cloudsMatch = metarData.metar.match(/(FEW|SCT|BKN|OVC)(\d{3})/g);
+        if (cloudsMatch) {
+            metarClouds.value = cloudsMatch.map(c => {
+                const type = c.substring(0, 3);
+                const height = parseInt(c.substring(3)) * 100;
+                return `${type}@${height}ft`;
+            }).join(', ');
         }
         
-        // Temperature
-        if (metarData.temperature && metarData.temperature.value) {
-            const tempC = metarData.temperature.value;
-            metarTemp.value = tempC;
+        // Parse temperature
+        const tempMatch = metarData.metar.match(/(M?\d{2})\/(M?\d{2})/);
+        if (tempMatch) {
+            const temp = tempMatch[1].replace('M', '-');
+            metarTemp.value = temp;
             // Update OAT field if temperature is found
-            oatInput.value = tempC;
+            oatInput.value = temp;
         }
         
-        // Altimeter (QNH)
-        if (metarData.altimeter && metarData.altimeter.value) {
-            metarQnh.value = metarData.altimeter.value.toFixed(0);
+        // Parse QNH
+        const qnhMatch = metarData.metar.match(/Q(\d{4})/);
+        if (qnhMatch) {
+            metarQnh.value = qnhMatch[1];
         }
         
         // Update runway condition based on weather
-        updateRunwayCondition(metarData);
+        updateRunwayCondition(metarData.metar);
     }
     
     // Update runway condition based on METAR data
-    function updateRunwayCondition(metarData) {
-        if (!metarData.conditions) return;
+    function updateRunwayCondition(metarText) {
+        if (!metarText) return;
         
-        const conditions = metarData.conditions.map(c => c.value).join(' ');
         const runwaySelect = document.getElementById('runwayCondition');
         
-        if (conditions.includes('SN') || conditions.includes('SG') || 
-            conditions.includes('PL') || conditions.includes('IC')) {
+        if (metarText.includes('SN') || metarText.includes('SG') || 
+            metarText.includes('PL') || metarText.includes('IC')) {
             runwaySelect.value = 'contaminated';
-        } else if (conditions.includes('RA') || conditions.includes('DZ') || 
-                   conditions.includes('SH') || conditions.includes('TS')) {
+        } else if (metarText.includes('RA') || metarText.includes('DZ') || 
+                   metarText.includes('SH') || metarText.includes('TS')) {
             runwaySelect.value = 'wet';
+        } else {
+            runwaySelect.value = 'dry';
         }
         
         // Update language if changed
@@ -348,12 +346,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Validate inputs
         if (isNaN(tow) || isNaN(oat) || isNaN(rwyLength) || isNaN(elevationVal)) {
-            alert(translations[currentLang].errors.invalidNumbers);
+            alert(currentLang === 'en' 
+                ? "Please enter valid numbers for all fields" 
+                : "Пожалуйста, введите корректные значения во все поля");
             return;
         }
         
         if (tow > mtow) {
-            alert(translations[currentLang].errors.exceedMTOW);
+            alert(currentLang === 'en' 
+                ? "Takeoff weight cannot exceed MTOW" 
+                : "Взлетный вес не может превышать MTOW");
             return;
         }
         
