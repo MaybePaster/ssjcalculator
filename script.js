@@ -1,464 +1,478 @@
+// Константы
+const MTOW = 45880;  // Максимальная взлётная масса (кг)
+const V1_MTOW = 136, VR_MTOW = 136, V2_MTOW = 143;  // Скорости для MTOW (узлы)
+const FLAPS_COEF = {"1": 1.8, "2": 1.5, "3": 1.2};
+const FLEX_COEF = 0.3;
+const THS_COEF = 0.2;
+
+// API Keys (в продакшене используйте бэкенд для хранения ключей)
+const AVIATIONSTACK_API_KEY = 'YOUR_AVIATIONSTACK_API_KEY';
+const CHECKWX_API_KEY = 'YOUR_CHECKWX_API_KEY';
+
+let translations = {};
+let currentLanguage = 'ru';
+let airportCache = {};
+
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    // Конфигурация API
-    const METAR_API_URL = 'https://metartaf.ru/';
-    const SAMPLE_DATA = {
-        'UUEE': 'UUEE 141030Z 24008MPS 9999 -SHRA BKN020 OVC050 12/09 Q1013 R24/290050 NOSIG',
-        'USRR': 'USRR 141030Z 23005MPS 9999 SCT030 BKN100 15/10 Q1012 R23/290050 NOSIG',
-        'UUWW': 'UUWW 141030Z 23007MPS 9999 SCT020 BKN040 11/08 Q1015 R32L/290050 NOSIG',
-        'UUDD': 'UUDD 141030Z 25009MPS 9999 FEW020 SCT040 13/07 Q1014 R14R/290050 NOSIG',
-        'ULLI': 'ULLI 141030Z 24010G15MPS 9999 -RA BKN015 OVC025 10/08 Q1016 R10L/290050 NOSIG',
-        'URSS': 'URSS 141030Z 22004MPS 9999 FEW030 BKN100 17/12 Q1011 R23/290050 NOSIG'
+    loadTranslations();
+    initializeTheme();
+    setupEventListeners();
+    updateYear();
+});
+
+// Загрузка переводов
+async function loadTranslations() {
+    try {
+        const response = await fetch('translations.json');
+        translations = await response.json();
+        applyTranslations();
+    } catch (error) {
+        console.error('Error loading translations:', error);
+        showError(currentLanguage === 'ru' ? 
+            'Ошибка загрузки переводов' : 
+            'Failed to load translations');
+    }
+}
+
+// Применение переводов
+function applyTranslations() {
+    const lang = translations[currentLanguage];
+    if (!lang) return;
+
+    // Обновляем все элементы с переводами
+    const elements = {
+        'title': lang.title,
+        'aircraft-params': lang.aircraftParams,
+        'tow-label': lang.tow,
+        'cg-label': lang.cg,
+        'flaps-config-label': lang.flapsConfig,
+        'flaps1': lang.flaps1,
+        'flaps2': lang.flaps2,
+        'flaps3': lang.flaps3,
+        'flex-temp-label': lang.flexTemp,
+        'flex-note': lang.flexNote,
+        'airport-params': lang.airportParams,
+        'icao-label': lang.icao,
+        'runway-label': lang.runway,
+        'runway-length-label': lang.runwayLength,
+        'runway-heading-label': lang.runwayHeading,
+        'runway-condition-label': lang.runwayCondition,
+        'dry': lang.dry,
+        'wet': lang.wet,
+        'snowy': lang.snowy,
+        'elevation-label': lang.elevation,
+        'weather-params': lang.weather,
+        'qnh-label': lang.qnh,
+        'temp-label': lang.temp,
+        'wind-dir-label': lang.windDir,
+        'wind-speed-label': lang.windSpeed,
+        'ths-setting-label': lang.thsSetting,
+        'ths-auto': lang.thsAuto,
+        'ths-manual': lang.thsManual,
+        'ths-value-label': lang.thsValue,
+        'calculate-btn': lang.calculate,
+        'sync-text': currentLanguage === 'ru' ? 'Синхронизировать' : 'Sync'
     };
 
-    // Language toggle
-    const languageToggle = document.getElementById('languageToggle');
-    const languageLabel = document.getElementById('languageLabel');
-    
-    // Theme toggle
-    const themeToggle = document.getElementById('themeToggle');
-    const themeLabel = document.getElementById('themeLabel');
-    const body = document.body;
-    
-    // Form elements
-    const calculateBtn = document.getElementById('calculateBtn');
-    const fetchMetarBtn = document.getElementById('fetchMetarBtn');
-    const icaoCode = document.getElementById('icaoCode');
-    const flapSetting = document.getElementById('flapSetting');
-    const towInput = document.getElementById('tow');
-    const oatInput = document.getElementById('oat');
-    const runwayLength = document.getElementById('runwayLength');
-    const runwayHeading = document.getElementById('runwayHeading');
-    const runwayCondition = document.getElementById('runwayCondition');
-    const elevation = document.getElementById('elevation');
-    
-    // Result fields
-    const flexTemp = document.getElementById('flexTemp');
-    const thsSetting = document.getElementById('thsSetting');
-    const v1 = document.getElementById('v1');
-    const vr = document.getElementById('vr');
-    const v2 = document.getElementById('v2');
-    
-    // METAR fields
-    const metarRaw = document.getElementById('metarRaw');
-    const metarWind = document.getElementById('metarWind');
-    const metarVisibility = document.getElementById('metarVisibility');
-    const metarWeather = document.getElementById('metarWeather');
-    const metarClouds = document.getElementById('metarClouds');
-    const metarTemp = document.getElementById('metarTemp');
-    const metarQnh = document.getElementById('metarQnh');
-    
-    // Translations
-    const translations = {
-        en: {
-            title: "SuperJet Takeoff Calculator",
-            themeLabel: "Dark Theme",
-            languageLabel: "Русский",
-            inputHeader: "Input Parameters",
-            resultsHeader: "Results",
-            metarHeader: "METAR Data",
-            icaoLabel: "ICAO Code",
-            rwyLengthLabel: "Runway Length (m)",
-            rwyHeadingLabel: "Runway Heading (°)",
-            rwyConditionLabel: "Runway Condition",
-            elevationLabel: "Elevation (m)",
-            flapLabel: "Flap Setting",
-            mtowLabel: "MTOW (tons)",
-            towLabel: "Takeoff Weight (tons)",
-            oatLabel: "OAT (°C)",
-            flexLabel: "Flex Temperature (°F)",
-            thsLabel: "THS Setting",
-            metarLabel: "Raw METAR",
-            windLabel: "Wind (kts)",
-            visibilityLabel: "Visibility (m)",
-            weatherLabel: "Weather",
-            cloudsLabel: "Clouds",
-            metarTempLabel: "Temperature (°C)",
-            qnhLabel: "QNH (hPa)",
-            calcButton: "Calculate",
-            fetchMetarButton: "Fetch METAR",
-            runwayConditions: {
-                dry: "Dry",
-                wet: "Wet",
-                contaminated: "Contaminated"
-            },
-            errors: {
-                invalidIcao: "Please enter a valid 4-letter ICAO code",
-                noData: "No METAR data available for this airport",
-                apiError: "Error fetching METAR data"
-            }
-        },
-        ru: {
-            title: "Калькулятор взлета SuperJet",
-            themeLabel: "Темная тема",
-            languageLabel: "English",
-            inputHeader: "Входные параметры",
-            resultsHeader: "Результаты",
-            metarHeader: "Данные METAR",
-            icaoLabel: "Код ICAO",
-            rwyLengthLabel: "Длина ВПП (м)",
-            rwyHeadingLabel: "Курс ВПП (°)",
-            rwyConditionLabel: "Состояние ВПП",
-            elevationLabel: "Высота над уровнем моря (м)",
-            flapLabel: "Положение закрылков",
-            mtowLabel: "MTOW (тонны)",
-            towLabel: "Взлетный вес (тонны)",
-            oatLabel: "Температура воздуха (°C)",
-            flexLabel: "Flex температура (°F)",
-            thsLabel: "Установка THS",
-            metarLabel: "Сырой METAR",
-            windLabel: "Ветер (узлы)",
-            visibilityLabel: "Видимость (м)",
-            weatherLabel: "Погода",
-            cloudsLabel: "Облачность",
-            metarTempLabel: "Температура (°C)",
-            qnhLabel: "QNH (гПа)",
-            calcButton: "Рассчитать",
-            fetchMetarButton: "Получить METAR",
-            runwayConditions: {
-                dry: "Сухая",
-                wet: "Мокрая",
-                contaminated: "Загрязненная"
-            },
-            errors: {
-                invalidIcao: "Пожалуйста, введите корректный 4-буквенный код ICAO",
-                noData: "Нет данных METAR для этого аэропорта",
-                apiError: "Ошибка получения данных METAR"
-            }
-        }
-    };
-    
-    // Current language (default English)
-    let currentLang = 'en';
-    
-    // Toggle language
-    languageToggle.addEventListener('change', function() {
-        currentLang = this.checked ? 'ru' : 'en';
-        updateLanguage();
-    });
-    
-    function updateLanguage() {
-        const lang = translations[currentLang];
-        document.getElementById('title').textContent = lang.title;
-        themeLabel.textContent = lang.themeLabel;
-        languageLabel.textContent = lang.languageLabel;
-        document.getElementById('inputHeader').textContent = lang.inputHeader;
-        document.getElementById('resultsHeader').textContent = lang.resultsHeader;
-        document.getElementById('metarHeader').textContent = lang.metarHeader;
-        document.getElementById('icaoLabel').textContent = lang.icaoLabel;
-        document.getElementById('rwyLengthLabel').textContent = lang.rwyLengthLabel;
-        document.getElementById('rwyHeadingLabel').textContent = lang.rwyHeadingLabel;
-        document.getElementById('rwyConditionLabel').textContent = lang.rwyConditionLabel;
-        document.getElementById('elevationLabel').textContent = lang.elevationLabel;
-        document.getElementById('flapLabel').textContent = lang.flapLabel;
-        document.getElementById('mtowLabel').textContent = lang.mtowLabel;
-        document.getElementById('towLabel').textContent = lang.towLabel;
-        document.getElementById('oatLabel').textContent = lang.oatLabel;
-        document.getElementById('flexLabel').textContent = lang.flexLabel;
-        document.getElementById('thsLabel').textContent = lang.thsLabel;
-        document.getElementById('metarLabel').textContent = lang.metarLabel;
-        document.getElementById('windLabel').textContent = lang.windLabel;
-        document.getElementById('visibilityLabel').textContent = lang.visibilityLabel;
-        document.getElementById('weatherLabel').textContent = lang.weatherLabel;
-        document.getElementById('cloudsLabel').textContent = lang.cloudsLabel;
-        document.getElementById('metarTempLabel').textContent = lang.metarTempLabel;
-        document.getElementById('qnhLabel').textContent = lang.qnhLabel;
-        document.getElementById('calculateBtn').textContent = lang.calcButton;
-        document.getElementById('fetchMetarBtn').textContent = lang.fetchMetarButton;
-        
-        // Update runway condition options
-        const options = runwayCondition.options;
-        options[0].text = lang.runwayConditions.dry;
-        options[1].text = lang.runwayConditions.wet;
-        options[2].text = lang.runwayConditions.contaminated;
+    for (const [id, text] of Object.entries(elements)) {
+        const element = document.getElementById(id);
+        if (element) element.textContent = text;
     }
-    
-    // Toggle theme
-    themeToggle.addEventListener('change', function() {
-        if (this.checked) {
-            body.classList.remove('light-theme');
-            body.classList.add('dark-theme');
-        } else {
-            body.classList.remove('dark-theme');
-            body.classList.add('light-theme');
-        }
-    });
-    
-    // Calculate button click handler
-    calculateBtn.addEventListener('click', function() {
-        calculateSpeeds();
-    });
-    
-    // Fetch METAR button click handler
-    fetchMetarBtn.addEventListener('click', function() {
-        const icao = icaoCode.value.trim().toUpperCase();
-        if (icao.length !== 4) {
-            alert(translations[currentLang].errors.invalidIcao);
-            return;
-        }
-        
-        fetchMetar(icao);
-    });
-    
-    // Form submit handler
-    document.getElementById('calcForm').addEventListener('submit', function(e) {
+}
+
+// Настройка обработчиков событий
+function setupEventListeners() {
+    document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    document.getElementById('language-select').addEventListener('change', changeLanguage);
+    document.getElementById('ths_setting').addEventListener('change', toggleTHSInput);
+    document.getElementById('calculator-form').addEventListener('submit', function(e) {
         e.preventDefault();
         calculateSpeeds();
     });
-    
-    // Fetch METAR from metartaf.ru with fallback
-    async function fetchMetar(icao) {
-        try {
-            fetchMetarBtn.disabled = true;
-            fetchMetarBtn.textContent = currentLang === 'en' ? "Loading..." : "Загрузка...";
-            
-            // Try direct fetch first
-            let response = await fetchWithRetry(`${METAR_API_URL}${icao}.json`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            let data = await response.json();
-            
-            if (!data || !data.metar) {
-                // Fallback to sample data if available
-                if (SAMPLE_DATA[icao]) {
-                    data = { metar: SAMPLE_DATA[icao] };
-                } else {
-                    throw new Error(translations[currentLang].errors.noData);
-                }
-            }
-            
-            processMetarData(data);
-            
-        } catch (error) {
-            console.error("METAR fetch error:", error);
-            metarRaw.value = `${translations[currentLang].errors.apiError}: ${error.message}`;
-            
-            // Show sample data if available
-            if (SAMPLE_DATA[icao]) {
-                metarRaw.value = SAMPLE_DATA[icao];
-                processMetarData({ metar: SAMPLE_DATA[icao] });
-            }
-        } finally {
-            fetchMetarBtn.disabled = false;
-            fetchMetarBtn.textContent = translations[currentLang].fetchMetarButton;
-        }
-    }
+    document.getElementById('sync-airport').addEventListener('click', syncAirportData);
+}
 
-    // Improved fetch with retry and CORS proxy fallback
-    async function fetchWithRetry(url, retries = 3) {
-        const proxyUrl = 'https://corsproxy.io/?';
-        
-        for (let i = 0; i < retries; i++) {
-            try {
-                // Try direct connection first
-                const directResponse = await fetch(url);
-                if (directResponse.ok) return directResponse;
-                
-                // Fallback to CORS proxy
-                const proxiedResponse = await fetch(proxyUrl + encodeURIComponent(url), {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                
-                if (proxiedResponse.ok) return proxiedResponse;
-                
-            } catch (error) {
-                if (i === retries - 1) throw error;
-                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-            }
-        }
-        
-        throw new Error(`Failed after ${retries} retries`);
+// Переключение темы
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+}
+
+// Инициализация темы
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme') || 
+                      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', savedTheme);
+}
+
+// Смена языка
+function changeLanguage() {
+    currentLanguage = this.value;
+    applyTranslations();
+}
+
+// Переключение поля THS
+function toggleTHSInput() {
+    const thsValueGroup = document.getElementById('ths-value-group');
+    thsValueGroup.style.display = this.value === 'manual' ? 'block' : 'none';
+}
+
+// Обновление года в подвале
+function updateYear() {
+    const year = new Date().getFullYear();
+    document.getElementById('footer-text').textContent = 
+        translations[currentLanguage]?.footer + ` | ${year}`;
+}
+
+// Расчёт FLEX температуры
+function calculateFlexTemp(oat, tow, elevation, headwind) {
+    let flexTemp = oat + (MTOW - tow) / 1000 + (elevation / 1000) - (headwind / 5);
+    flexTemp = Math.max(oat + 5, Math.min(oat + 50, flexTemp));
+    return Math.round(flexTemp);
+}
+
+// Синхронизация данных аэропорта
+async function syncAirportData() {
+    const icao = document.getElementById('icao').value.trim().toUpperCase();
+    const syncButton = document.getElementById('sync-airport');
+    
+    if (!icao || icao.length !== 4) {
+        showError(currentLanguage === 'ru' ? 
+            'Введите корректный ICAO код (4 буквы)' : 
+            'Enter valid ICAO code (4 letters)');
+        return;
     }
     
-    // Process METAR data
-    function processMetarData(metarData) {
-        clearMetarFields();
-        
-        if (!metarData.metar) {
-            metarRaw.value = translations[currentLang].errors.noData;
-            return;
-        }
-        
-        const metarText = metarData.metar;
-        metarRaw.value = metarText;
-        
-        try {
-            // Parse wind
-            const windMatch = metarText.match(/(\d{3}|VRB)(\d{2,3})(G(\d{2,3}))?(KT|MPS)/);
-            if (windMatch) {
-                let windDir = windMatch[1];
-                let windSpeed = windMatch[2];
-                const windGust = windMatch[4] ? `G${windMatch[4]}` : '';
-                
-                // Convert MPS to KT if needed
-                if (windMatch[5] === 'MPS') {
-                    windSpeed = Math.round(windSpeed * 1.94384);
-                }
-                
-                metarWind.value = `${windDir}°/${windSpeed}${windGust} KT`;
-            }
-            
-            // Parse visibility
-            const visMatch = metarText.match(/(\d{4})(?=\s|$)/) || 
-                            metarText.match(/(\d+)SM/) || 
-                            metarText.match(/(\d+)KM/);
-            if (visMatch) {
-                let visibility = visMatch[1];
-                if (visMatch[2]) visibility = Math.round(visMatch[2] * 1609.34);
-                if (visMatch[3]) visibility = visMatch[3] * 1000;
-                metarVisibility.value = visibility;
-            }
-            
-            // Parse weather phenomena
-            const weatherCodes = ['RA','SN','DZ','SG','PL','GS','GR','IC','TS','FG','BR','HZ','DU','SA','PY','VA','PO','SQ','FC','SS','DS'];
-            const weatherMatch = metarText.match(new RegExp(`(\\+|-|VC)?(${weatherCodes.join('|')})`, 'g'));
-            if (weatherMatch) {
-                metarWeather.value = weatherMatch.join(' ');
-            }
-            
-            // Parse clouds
-            const cloudsMatch = metarText.match(/(FEW|SCT|BKN|OVC)(\d{3})/g);
-            if (cloudsMatch) {
-                metarClouds.value = cloudsMatch.map(c => {
-                    const type = c.substring(0,3);
-                    const height = parseInt(c.substring(3)) * 100;
-                    return `${type}@${height}ft`;
-                }).join(', ');
-            }
-            
-            // Parse temperature
-            const tempMatch = metarText.match(/(M?\d{2})\/(M?\d{2})/);
-            if (tempMatch) {
-                const temp = tempMatch[1].replace('M', '-');
-                metarTemp.value = temp;
-                oatInput.value = temp;
-            }
-            
-            // Parse QNH
-            const qnhMatch = metarText.match(/Q(\d{4})/) || 
-                             metarText.match(/A(\d{4})/);
-            if (qnhMatch) {
-                metarQnh.value = qnhMatch[1];
-            }
-            
-            // Update runway condition
-            updateRunwayCondition(metarText);
-            
-        } catch (parseError) {
-            console.error("METAR parse error:", parseError);
-        }
+    if (airportCache[icao]) {
+        fillAirportData(airportCache[icao]);
+        showSuccess(currentLanguage === 'ru' ? 
+            'Данные загружены из кэша' : 
+            'Data loaded from cache');
+        return;
     }
     
-    // Update runway condition based on METAR
-    function updateRunwayCondition(metarText) {
-        if (!metarText) return;
+    syncButton.disabled = true;
+    syncButton.innerHTML = `<span class="loading"></span> ${currentLanguage === 'ru' ? 'Загрузка...' : 'Loading...'}`;
+    
+    try {
+        const [airportData, metarData] = await Promise.all([
+            fetchAirportData(icao),
+            fetchMETAR(icao)
+        ]);
         
-        const runwaySelect = document.getElementById('runwayCondition');
-        
-        if (/(SN|SG|PL|IC|GR|GS)/.test(metarText)) {
-            runwaySelect.value = 'contaminated';
-        } else if (/(RA|DZ|SH|TS)/.test(metarText)) {
-            runwaySelect.value = 'wet';
-        } else {
-            runwaySelect.value = 'dry';
+        if (!airportData && !metarData) {
+            throw new Error(currentLanguage === 'ru' ? 
+                'Данные аэропорта не найдены' : 
+                'Airport data not found');
         }
         
-        // Update language
-        const lang = translations[currentLang];
-        runwaySelect.options[0].text = lang.runwayConditions.dry;
-        runwaySelect.options[1].text = lang.runwayConditions.wet;
-        runwaySelect.options[2].text = lang.runwayConditions.contaminated;
+        const combinedData = {
+            ...airportData,
+            ...metarData
+        };
+        
+        airportCache[icao] = combinedData;
+        fillAirportData(combinedData);
+        
+        showSuccess(currentLanguage === 'ru' ? 
+            'Данные аэропорта успешно загружены' : 
+            'Airport data loaded successfully');
+    } catch (error) {
+        console.error('Sync error:', error);
+        showError(error.message);
+    } finally {
+        syncButton.disabled = false;
+        syncButton.innerHTML = `<span class="sync-icon">🔄</span><span id="sync-text">${currentLanguage === 'ru' ? 'Синхронизировать' : 'Sync'}</span>`;
+    }
+}
+
+// Запрос данных аэропорта
+async function fetchAirportData(icao) {
+    try {
+        const response = await fetch(`https://api.aviationstack.com/v1/airports?access_key=${AVIATIONSTACK_API_KEY}&icao=${icao}`);
+        if (!response.ok) throw new Error('API request failed');
+        
+        const data = await response.json();
+        if (!data.data?.length) throw new Error('Airport not found');
+        
+        const airport = data.data[0];
+        const runway = airport.runways?.[0] || {};
+        
+        return {
+            icao: airport.icao,
+            elevation_ft: airport.elevation_ft || 0,
+            runway: runway.le_ident || '',
+            runway_length: runway.length_ft ? Math.round(runway.length_ft * 0.3048) : 0,
+            runway_heading: runway.le_heading_degT || 0
+        };
+    } catch (error) {
+        console.error('Error fetching airport data:', error);
+        return null;
+    }
+}
+
+// Запрос METAR
+async function fetchMETAR(icao) {
+    try {
+        const response = await fetch(`https://api.checkwx.com/metar/${icao}/decoded`, {
+            headers: {'X-API-Key': CHECKWX_API_KEY}
+        });
+        if (!response.ok) throw new Error('METAR API request failed');
+        
+        const data = await response.json();
+        if (!data.data?.length) throw new Error('METAR not found');
+        
+        const metar = data.data[0];
+        const conditions = metar.conditions || [];
+        const isRain = conditions.some(c => c.code.includes('RA') || c.code.includes('DZ'));
+        const isSnow = conditions.some(c => c.code.includes('SN') || c.code.includes('SG'));
+        
+        return {
+            temperature: metar.temperature?.celsius || 15,
+            qnh: metar.barometer?.hpa || 1013,
+            wind_degrees: metar.wind?.degrees || 0,
+            wind_speed_kts: metar.wind?.speed_kts || 0,
+            condition: isSnow ? 'snowy' : isRain ? 'wet' : 'dry'
+        };
+    } catch (error) {
+        console.error('Error fetching METAR:', error);
+        return null;
+    }
+}
+
+// Заполнение данных аэропорта
+function fillAirportData(data) {
+    const fields = {
+        'runway': data.runway,
+        'runway_length': data.runway_length,
+        'runway_heading': data.runway_heading,
+        'airport_elevation': data.elevation_ft,
+        'temperature': data.temperature,
+        'qnh': data.qnh,
+        'wind_direction': data.wind_degrees,
+        'wind_speed': data.wind_speed_kts,
+        'runway_condition': data.condition
+    };
+    
+    for (const [id, value] of Object.entries(fields)) {
+        if (value !== undefined) {
+            const element = document.getElementById(id);
+            if (element) element.value = value;
+        }
+    }
+}
+
+// Расчёт скоростей
+function calculateSpeeds() {
+    const errorElement = document.getElementById('error');
+    errorElement.style.display = 'none';
+    
+    try {
+        const formData = getFormData();
+        validateInputData(formData);
+        
+        const windAngle = Math.abs(formData.wind_direction - formData.runway_heading) % 360;
+        const effectiveWindAngle = windAngle > 180 ? 360 - windAngle : windAngle;
+        const headwind = formData.wind_speed * Math.cos(effectiveWindAngle * Math.PI / 180);
+        
+        const flexTemp = calculateFlexTemp(
+            formData.temperature,
+            formData.tow,
+            formData.airport_elevation,
+            headwind
+        );
+        document.getElementById('flex_temp_display').textContent = `${flexTemp} °C`;
+        
+        const speeds = calculateFinalSpeeds(formData, headwind, flexTemp);
+        const requiredLength = (speeds.V2 * 1.5) * 0.5144;
+        
+        displayResults(formData, speeds, headwind, requiredLength, flexTemp);
+    } catch (error) {
+        showError(error.message);
+        document.getElementById('results').style.display = 'none';
+    }
+}
+
+// Получение данных формы
+function getFormData() {
+    return {
+        tow: parseFloat(document.getElementById('tow').value),
+        cg: parseFloat(document.getElementById('cg').value),
+        flaps_config: document.getElementById('flaps_config').value,
+        icao: document.getElementById('icao').value.trim().toUpperCase(),
+        runway: document.getElementById('runway').value.trim().toUpperCase(),
+        runway_length: parseFloat(document.getElementById('runway_length').value),
+        runway_heading: parseInt(document.getElementById('runway_heading').value),
+        runway_condition: document.getElementById('runway_condition').value.toLowerCase(),
+        airport_elevation: parseFloat(document.getElementById('airport_elevation').value),
+        qnh: parseFloat(document.getElementById('qnh').value),
+        temperature: parseInt(document.getElementById('temperature').value),
+        wind_direction: parseInt(document.getElementById('wind_direction').value),
+        wind_speed: parseFloat(document.getElementById('wind_speed').value),
+        ths_setting: document.getElementById('ths_setting').value,
+        ths_value: parseFloat(document.getElementById('ths_value').value) || 0
+    };
+}
+
+// Валидация данных
+function validateInputData(data) {
+    if (isNaN(data.tow) || data.tow <= 0) {
+        throw new Error(currentLanguage === 'ru' ? 
+            'Взлётная масса должна быть положительным числом' : 
+            'Takeoff weight must be positive');
     }
     
-    function clearMetarFields() {
-        metarWind.value = '';
-        metarVisibility.value = '';
-        metarWeather.value = '';
-        metarClouds.value = '';
-        metarTemp.value = '';
-        metarQnh.value = '';
+    if (data.tow > MTOW) {
+        throw new Error(translations[currentLanguage].error + ' ' + translations[currentLanguage].towError);
     }
     
-    // Main calculation function
-    function calculateSpeeds() {
-        // Get input values
-        const flap = flapSetting.value;
-        const mtow = parseFloat(document.getElementById('mtow').value);
-        const mtowV1 = parseFloat(document.getElementById('mtowV1').value);
-        const mtowVr = parseFloat(document.getElementById('mtowVr').value);
-        const mtowV2 = parseFloat(document.getElementById('mtowV2').value);
-        const tow = parseFloat(towInput.value);
-        const oat = parseFloat(oatInput.value);
-        const rwyLength = parseFloat(runwayLength.value);
-        const rwyCondition = runwayCondition.value;
-        const elevationVal = parseFloat(elevation.value);
-        
-        // Validate inputs
-        if (isNaN(tow) || isNaN(oat) || isNaN(rwyLength) || isNaN(elevationVal)) {
-            alert(currentLang === 'en' 
-                ? "Please enter valid numbers for all fields" 
-                : "Пожалуйста, введите корректные значения во все поля");
-            return;
-        }
-        
-        if (tow > mtow) {
-            alert(currentLang === 'en' 
-                ? "Takeoff weight cannot exceed MTOW" 
-                : "Взлетный вес не может превышать MTOW");
-            return;
-        }
-        
-        // Calculate speed corrections
-        const weightDiff = mtow - tow;
-        let coef = flap === "2" ? 1.5 : 1.8;
-        const correction = weightDiff * coef;
-        
-        // Calculate base speeds
-        let calcV1 = (mtowV1 - correction);
-        let calcVr = (mtowVr - correction);
-        let calcV2 = (mtowV2 - correction);
-        
-        // Apply runway condition adjustments
-        if (rwyCondition === "wet") {
-            calcV1 = Math.min(calcV1 * 1.05, calcV1 + 5);
-            calcVr = Math.min(calcVr * 1.03, calcVr + 3);
-        } else if (rwyCondition === "contaminated") {
-            calcV1 = Math.min(calcV1 * 1.1, calcV1 + 10);
-            calcVr = Math.min(calcVr * 1.05, calcVr + 5);
-        }
-        
-        // Apply runway length adjustment
-        const lengthAdjustment = (3200 - rwyLength) / 1000;
-        calcV1 = Math.max(calcV1 + lengthAdjustment, calcV1 * 1.02);
-        
-        // Apply elevation adjustment
-        const elevationAdjustment = elevationVal / 500;
-        calcV1 += elevationAdjustment;
-        calcVr += elevationAdjustment;
-        calcV2 += elevationAdjustment;
-        
-        // Calculate Flex temperature
-        const flexTempF = (50 - (0.33 * (mtow - tow)) + (0.11 * oat) + (elevationVal / 300)).toFixed(1);
-        
-        // Determine THS setting
-        let ths = flap === "2" 
-            ? (tow > 40 ? "5" : "4") 
-            : (tow > 40 ? "6" : "5");
-        
-        if (rwyCondition !== "dry") {
-            ths += " (+" + (flap === "2" ? "1" : "0.5") + ")";
-        }
-        
-        // Update results
-        flexTemp.value = flexTempF;
-        thsSetting.value = ths;
-        v1.value = calcV1.toFixed(1);
-        vr.value = calcVr.toFixed(1);
-        v2.value = calcV2.toFixed(1);
+    if (data.ths_setting === 'manual' && (isNaN(data.ths_value) || data.ths_value < -4 || data.ths_value > 4)) {
+        throw new Error(currentLanguage === 'ru' ? 
+            'Значение THS должно быть между -4 и +4' : 
+            'THS value must be between -4 and +4');
+    }
+}
+
+// Расчёт итоговых скоростей
+function calculateFinalSpeeds(data, headwind, flexTemp) {
+    const coef = FLAPS_COEF[data.flaps_config];
+    const massCorrection = (MTOW - data.tow) * coef / 1000;
+    
+    let V1 = V1_MTOW - massCorrection;
+    let VR = VR_MTOW - massCorrection;
+    let V2 = V2_MTOW - massCorrection;
+    
+    // Коррекции
+    const tempCorrection = (data.temperature - 15) / 10 * 1.5;
+    const windCorrection = headwind * 0.3;
+    const flexCorrection = (flexTemp - data.temperature) * FLEX_COEF;
+    
+    V1 += tempCorrection - windCorrection + flexCorrection;
+    VR += tempCorrection - windCorrection + flexCorrection;
+    V2 += tempCorrection - windCorrection + flexCorrection;
+    
+    // Состояние ВПП
+    if (data.runway_condition === "wet" || data.runway_condition === "мокрая") {
+        V1 += 3; VR += 3; V2 += 3;
+    } else if (data.runway_condition === "snowy" || data.runway_condition === "заснеженная") {
+        V1 += 5; VR += 5; V2 += 5;
     }
     
-    // Initialize
-    updateLanguage();
-});
+    // THS
+    if (data.ths_setting === 'manual') {
+        const thsCorrection = data.ths_value * THS_COEF;
+        V1 += thsCorrection; VR += thsCorrection; V2 += thsCorrection;
+    }
+    
+    return {
+        V1: Math.max(Math.round(V1), 110),
+        VR: Math.max(Math.round(VR), 115),
+        V2: Math.max(Math.round(V2), 120)
+    };
+}
+
+// Отображение результатов
+function displayResults(data, speeds, headwind, requiredLength, flexTemp) {
+    const resultsDiv = document.getElementById('results');
+    const lang = translations[currentLanguage];
+    const isRussian = currentLanguage === 'ru';
+    
+    const runwayWarning = requiredLength > data.runway_length ? 
+        `<span class="warning">${lang.notEnough}</span>` : '';
+    
+    const thsRow = data.ths_setting === 'manual' ? `
+        <tr>
+            <th>${isRussian ? 'Значение THS' : 'THS Value'}</th>
+            <td>${data.ths_value}</td>
+        </tr>
+    ` : '';
+    
+    resultsDiv.innerHTML = `
+        <h2>${lang.results}</h2>
+        <div class="speeds">
+            <div class="speed-box">
+                <div>${lang.v1}</div>
+                <div class="speed-value">${speeds.V1}</div>
+                <div>${lang.knots}</div>
+            </div>
+            <div class="speed-box">
+                <div>${lang.vr}</div>
+                <div class="speed-value">${speeds.VR}</div>
+                <div>${lang.knots}</div>
+            </div>
+            <div class="speed-box">
+                <div>${lang.v2}</div>
+                <div class="speed-value">${speeds.V2}</div>
+                <div>${lang.knots}</div>
+            </div>
+        </div>
+        <h3>${lang.takeoffInfo}</h3>
+        <table>
+            <tr>
+                <th>${lang.airport}</th>
+                <td>${data.icao}, ${isRussian ? 'ВПП' : 'Runway'} ${data.runway}</td>
+            </tr>
+            <tr>
+                <th>${lang.length}</th>
+                <td>${data.runway_length} m ${runwayWarning}</td>
+            </tr>
+            <tr>
+                <th>${isRussian ? 'Требуемая длина' : 'Required length'}</th>
+                <td>${Math.round(requiredLength)} m</td>
+            </tr>
+            <tr>
+                <th>${lang.heading}</th>
+                <td>${data.runway_heading}°</td>
+            </tr>
+            <tr>
+                <th>${lang.condition}</th>
+                <td>${data.runway_condition}</td>
+            </tr>
+            <tr>
+                <th>${lang.elev}</th>
+                <td>${data.airport_elevation} ft</td>
+            </tr>
+            <tr>
+                <th>${lang.headwind}</th>
+                <td>${headwind.toFixed(1)} ${lang.knots}</td>
+            </tr>
+            <tr>
+                <th>FLEX TO TEMP</th>
+                <td>${flexTemp} °C</td>
+            </tr>
+            <tr>
+                <th>${isRussian ? 'Режим THS' : 'THS Mode'}</th>
+                <td>${data.ths_setting === 'auto' ? (isRussian ? 'Авто' : 'Auto') : (isRussian ? 'Ручной' : 'Manual')}</td>
+            </tr>
+            ${thsRow}
+        </table>
+    `;
+    
+    resultsDiv.style.display = 'block';
+    resultsDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Показать сообщение об ошибке
+function showError(message) {
+    const messagesDiv = document.getElementById('messages');
+    messagesDiv.innerHTML = `
+        <div class="message error-message">
+            ${message}
+        </div>
+    `;
+    messagesDiv.querySelector('.message').style.display = 'block';
+}
+
+// Показать сообщение об успехе
+function showSuccess(message) {
+    const messagesDiv = document.getElementById('messages');
+    messagesDiv.innerHTML = `
+        <div class="message success-message">
+            ${message}
+        </div>
+    `;
+    messagesDiv.querySelector('.message').style.display = 'block';
+}

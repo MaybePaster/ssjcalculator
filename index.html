@@ -1,161 +1,153 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperJet Takeoff Calculator</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <title>Калькулятор взлётных скоростей</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
 </head>
-<body class="light-theme">
-    <div class="container mt-4">
-        <div class="row mb-4">
-            <div class="col">
-                <h1 id="title">SuperJet Takeoff Calculator</h1>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="themeToggle">
-                    <label class="form-check-label" for="themeToggle" id="themeLabel">Dark Theme</label>
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="languageToggle">
-                    <label class="form-check-label" for="languageToggle" id="languageLabel">English</label>
-                </div>
-            </div>
+<body>
+    <div class="container">
+        <div class="controls">
+            <button id="theme-toggle" aria-label="Toggle theme">🌓</button>
+            <select id="language-select">
+                <option value="ru">Русский</option>
+                <option value="en">English</option>
+            </select>
         </div>
-
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-header" id="inputHeader">Input Parameters</div>
-                    <div class="card-body">
-                        <form id="calcForm">
-                            <div class="mb-3">
-                                <label for="icaoCode" class="form-label" id="icaoLabel">ICAO Code</label>
-                                <input type="text" class="form-control" id="icaoCode" placeholder="UUEE" maxlength="4">
-                                <button type="button" class="btn btn-secondary mt-2" id="fetchMetarBtn" id="fetchMetarButton">Fetch METAR</button>
-                            </div>
-                            <div class="mb-3">
-                                <label for="runwayLength" class="form-label" id="rwyLengthLabel">Runway Length (m)</label>
-                                <input type="number" class="form-control" id="runwayLength" value="3200">
-                            </div>
-                            <div class="mb-3">
-                                <label for="runwayHeading" class="form-label" id="rwyHeadingLabel">Runway Heading (°)</label>
-                                <input type="number" class="form-control" id="runwayHeading" min="1" max="36" value="24">
-                            </div>
-                            <div class="mb-3">
-                                <label for="runwayCondition" class="form-label" id="rwyConditionLabel">Runway Condition</label>
-                                <select class="form-select" id="runwayCondition">
-                                    <option value="dry">Dry</option>
-                                    <option value="wet">Wet</option>
-                                    <option value="contaminated">Contaminated</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="elevation" class="form-label" id="elevationLabel">Elevation (m)</label>
-                                <input type="number" class="form-control" id="elevation" value="190">
-                            </div>
-                            <div class="mb-3">
-                                <label for="flapSetting" class="form-label" id="flapLabel">Flap Setting</label>
-                                <select class="form-select" id="flapSetting">
-                                    <option value="2">Flaps 2</option>
-                                    <option value="1F">Flaps 1+F</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="mtow" class="form-label" id="mtowLabel">MTOW (tons)</label>
-                                <input type="number" class="form-control" id="mtow" value="45.880" step="0.001" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label for="mtowV1" class="form-label">MTOW V1 (kts)</label>
-                                <input type="number" class="form-control" id="mtowV1" value="136" step="0.1" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label for="mtowVr" class="form-label">MTOW VR (kts)</label>
-                                <input type="number" class="form-control" id="mtowVr" value="136" step="0.1" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label for="mtowV2" class="form-label">MTOW V2 (kts)</label>
-                                <input type="number" class="form-control" id="mtowV2" value="143" step="0.1" readonly>
-                            </div>
-                            <div class="mb-3">
-                                <label for="tow" class="form-label" id="towLabel">Takeoff Weight (tons)</label>
-                                <input type="number" class="form-control" id="tow" value="42.320" step="0.001">
-                            </div>
-                            <div class="mb-3">
-                                <label for="oat" class="form-label" id="oatLabel">OAT (°C)</label>
-                                <input type="number" class="form-control" id="oat" value="15" step="0.1">
-                            </div>
-                            <button type="button" class="btn btn-primary" id="calculateBtn" id="calcButton">Calculate</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-header" id="resultsHeader">Results</div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="flexTemp" class="form-label" id="flexLabel">Flex Temperature (°F)</label>
-                            <input type="text" class="form-control" id="flexTemp" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="thsSetting" class="form-label" id="thsLabel">THS Setting</label>
-                            <input type="text" class="form-control" id="thsSetting" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="v1" class="form-label">V1 (kts)</label>
-                            <input type="text" class="form-control" id="v1" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="vr" class="form-label">VR (kts)</label>
-                            <input type="text" class="form-control" id="vr" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="v2" class="form-label">V2 (kts)</label>
-                            <input type="text" class="form-control" id="v2" readonly>
-                        </div>
-                    </div>
+        
+        <h1 id="title">✈️ Калькулятор взлётных скоростей</h1>
+        
+        <div id="error" class="error"></div>
+        
+        <form id="calculator-form">
+            <div class="form-section">
+                <h2 id="aircraft-params">Параметры самолёта</h2>
+                
+                <div class="form-group">
+                    <label for="tow" id="tow-label">Взлётная масса (TOW, кг):</label>
+                    <input type="number" step="0.1" id="tow" name="tow" required>
                 </div>
                 
-                <div class="card mb-4">
-                    <div class="card-header" id="metarHeader">METAR Data</div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="metarRaw" class="form-label" id="metarLabel">Raw METAR</label>
-                            <textarea class="form-control" id="metarRaw" rows="3" readonly></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="metarWind" class="form-label" id="windLabel">Wind (kts)</label>
-                            <input type="text" class="form-control" id="metarWind" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="metarVisibility" class="form-label" id="visibilityLabel">Visibility (m)</label>
-                            <input type="text" class="form-control" id="metarVisibility" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="metarWeather" class="form-label" id="weatherLabel">Weather</label>
-                            <input type="text" class="form-control" id="metarWeather" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="metarClouds" class="form-label" id="cloudsLabel">Clouds</label>
-                            <input type="text" class="form-control" id="metarClouds" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="metarTemp" class="form-label" id="metarTempLabel">Temperature (°C)</label>
-                            <input type="text" class="form-control" id="metarTemp" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label for="metarQnh" class="form-label" id="qnhLabel">QNH (hPa)</label>
-                            <input type="text" class="form-control" id="metarQnh" readonly>
-                        </div>
-                    </div>
+                <div class="form-group">
+                    <label for="cg" id="cg-label">Центровка (%):</label>
+                    <input type="number" step="0.1" id="cg" name="cg" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="flaps_config" id="flaps-config-label">Конфигурация закрылков:</label>
+                    <select id="flaps_config" name="flaps_config" required>
+                        <option value="1" id="flaps1">Flaps 1+F</option>
+                        <option value="2" id="flaps2" selected>Flaps 2</option>
+                        <option value="3" id="flaps3">Flaps 3</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label id="flex-temp-label">FLEX TO TEMP:</label>
+                    <div id="flex_temp_display" class="calculated-value">-- °C</div>
+                    <small id="flex-note" class="note-text">Рассчитано автоматически</small>
                 </div>
             </div>
+            
+            <div class="form-section">
+                <h2 id="airport-params">Параметры аэропорта</h2>
+                
+                <div class="form-group">
+                    <label for="icao" id="icao-label">ICAO аэропорта:</label>
+                    <input type="text" id="icao" name="icao" required placeholder="UUEE" maxlength="4">
+                    <button type="button" id="sync-airport" class="sync-button">
+                        <span class="sync-icon">🔄</span>
+                        <span id="sync-text">Синхронизировать</span>
+                    </button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway" id="runway-label">ВПП (например, 08L):</label>
+                    <input type="text" id="runway" name="runway" required placeholder="14L">
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway_length" id="runway-length-label">Длина ВПП (м):</label>
+                    <input type="number" id="runway_length" name="runway_length" required value="3500">
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway_heading" id="runway-heading-label">Курс ВПП (deg):</label>
+                    <input type="number" id="runway_heading" name="runway_heading" required value="140">
+                </div>
+                
+                <div class="form-group">
+                    <label for="runway_condition" id="runway-condition-label">Состояние ВПП:</label>
+                    <select id="runway_condition" name="runway_condition" required>
+                        <option value="сухая" id="dry" selected>Сухая</option>
+                        <option value="мокрая" id="wet">Мокрая</option>
+                        <option value="заснеженная" id="snowy">Заснеженная</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="airport_elevation" id="elevation-label">Высота аэропорта (футы):</label>
+                    <input type="number" id="airport_elevation" name="airport_elevation" required value="500">
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h2 id="weather-params">Метеорологические условия</h2>
+                
+                <div class="form-group">
+                    <label for="qnh" id="qnh-label">QNH (гПа):</label>
+                    <input type="number" step="0.1" id="qnh" name="qnh" required value="1013.2">
+                </div>
+                
+                <div class="form-group">
+                    <label for="temperature" id="temp-label">Температура OAT (°C):</label>
+                    <input type="number" id="temperature" name="temperature" required value="15" step="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="wind_direction" id="wind-dir-label">Направление ветра (deg):</label>
+                    <input type="number" id="wind_direction" name="wind_direction" required value="140">
+                </div>
+                
+                <div class="form-group">
+                    <label for="wind_speed" id="wind-speed-label">Скорость ветра (узлы):</label>
+                    <input type="number" step="0.1" id="wind_speed" name="wind_speed" required value="5">
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h2 id="ths-params">Настройки THS</h2>
+                
+                <div class="form-group">
+                    <label for="ths_setting" id="ths-setting-label">Режим THS:</label>
+                    <select id="ths_setting" name="ths_setting" required>
+                        <option value="auto" id="ths-auto">Авто</option>
+                        <option value="manual" id="ths-manual">Ручной</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="ths-value-group" style="display: none;">
+                    <label for="ths_value" id="ths-value-label">Значение THS:</label>
+                    <input type="number" id="ths_value" name="ths_value" step="0.1" min="-4" max="4" placeholder="Введите THS">
+                </div>
+            </div>
+            
+            <button type="submit" id="calculate-btn">Рассчитать скорости</button>
+        </form>
+        
+        <div id="messages"></div>
+        
+        <div id="results" class="result-section" style="display: none;">
+            <!-- Результаты будут вставлены сюда через JavaScript -->
         </div>
     </div>
-
+    
+    <footer>
+        <p id="footer-text">Калькулятор взлётных скоростей v2.0 | Для учебных целей</p>
+    </footer>
+    
     <script src="script.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
